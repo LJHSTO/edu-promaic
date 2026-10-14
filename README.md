@@ -1,400 +1,104 @@
 # Edu ProMAIC
 
-## 项目背景
+[![自动检查](https://github.com/LJHSTO/edu-promaic/actions/workflows/checks.yml/badge.svg)](https://github.com/LJHSTO/edu-promaic/actions/workflows/checks.yml)
+[![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-339933)](https://nodejs.org/)
+[![许可证：MIT](https://img.shields.io/badge/许可证-MIT-blue)](LICENSE)
 
-大学新生第一次接触微积分时，困难往往不只是“算错了”，还包括：
+Edu ProMAIC 是面向大学新生微积分练习的主动学习辅助工具。学生反复出错时，它先问一个帮助梳理思路的问题，再逐步提供线索；提示后答对，还要做一道无提示变式题。
 
-- 不理解函数、极限、导数和积分之间的关系；
-- 能够套用公式，却不知道公式的适用条件；
-- 遇到困难时不一定会主动向教师或助教求助；
-- 得到答案后能够完成当前题目，却不能独立解决相似问题；
-- 教师难以在课堂上持续观察每位学生的思考过程。
+目前仓库提供一个“极限与函数值”练习演示、规则决策接口和自动化测试。教师看板、持久化学习记录、完整课程包及模型接入仍在计划中，详见[功能规格](docs/requirements/functional_spec.md)。
 
-Edu ProMAIC 聚焦于大学新生微积分课堂中的主动学习支持。项目希望设计一种能够理解学习过程、控制帮助时机和支架强度的教育 Agent：
+## 本地运行
 
-- 学生真正需要帮助时，提供适度的支持；
-- 学生正在有效思考时，避免过早打断；
-- 证据不足时，选择继续观察或保持沉默；
-- 支架之后，通过无提示任务观察学生能否独立完成。
+需要 Node.js 22 或更新版本和随附的 npm。项目使用 Node.js 内置模块，没有需要安装的第三方依赖，也不需要模型密钥。
 
-首期场景包括课堂讲解后的互动练习、形成性测验和课后复习。
-
-## 问题定义
-
-| 维度 | 设计说明 |
-|---|---|
-| 目标对象 | 大学一年级学生、微积分教师和助教 |
-| 发生场景 | 大学新生微积分课堂、课堂练习、形成性测验和课后复习 |
-| 核心问题 | 系统难以判断学生是否真正遇到困难、当前是否适合被打断以及需要何种帮助 |
-| 设计理由 | 教师无法持续观察所有学生，反应式系统又无法覆盖没有主动提问的学生 |
-| 介入时机 | 学生出现持续错误、停滞、概念混淆或主动表达困难时 |
-| 解决方式 | 结合学习证据、时机判断、分级支架、学生控制和独立验证形成学习闭环 |
-| 判断标准 | 不只看提示次数和即时正确率，还看支架后的独立完成、迁移和保持 |
-
-## 典型课堂流程
-
-```text
-教师讲解
-  ↓
-学生独立练习
-  ↓
-学习事件采集
-  ↓
-证据整理与状态判断
-  ↓
-主动帮助、继续等待或保持沉默
-  ↓
-学生接受、拒绝、延迟或关闭帮助
-  ↓
-分级教学支架
-  ↓
-无提示独立验证
-  ↓
-迁移与复习
+```powershell
+git clone https://github.com/LJHSTO/edu-promaic.git
+cd edu-promaic
+npm start
 ```
 
-一次典型的帮助回合：
+在浏览器访问 [http://localhost:3000](http://localhost:3000)。页面与 API 由同一服务提供。停止服务时在终端按 `Ctrl+C`。
 
-1. 学生在极限题中连续两次把极限值当作函数值；
-2. 系统记录错误类型、任务阶段和最近尝试；
-3. Agent 先要求学生解释自己的判断；
-4. 学生仍然无法区分两个概念；
-5. Agent 提供概念线索或图像表征；
-6. 学生重新完成当前任务；
-7. 系统关闭主动提示，安排一道新的无提示验证题；
-8. 根据验证结果决定后续是否逐渐减少帮助。
+端口被占用时，PowerShell 中可这样换端口：
 
-## 首期课程设计
-
-首期面向大学新生的微积分入门课程，计划包含四个模块：
-
-### 函数与数学表征
-
-- 函数的定义、定义域和值域；
-- 图像、表格、公式和文字之间的转换；
-- 函数变化趋势的描述。
-
-### 极限与连续
-
-- 极限的直观含义；
-- 左极限和右极限；
-- 极限与函数值的区别；
-- 连续性的判断。
-
-### 导数与变化率
-
-- 平均变化率；
-- 瞬时变化率；
-- 导数的几何意义；
-- 导数的计算和简单应用。
-
-### 积分与累积
-
-- 定积分的直观含义；
-- 面积和累积量；
-- 原函数；
-- 牛顿-莱布尼茨公式；
-- 基本积分方法。
-
-## 设计维度
-
-项目围绕六个相互关联的维度组织设计：
-
-### D1：学习状态证据
-
-系统根据什么判断学生可能遇到困难：
-
-- 作答结果；
-- 错误类型；
-- 重复尝试；
-- 关键步骤停留；
-- 学生自我解释；
-- 主动求助；
-- 知识点历史记录。
-
-### D2：时机与沉默
-
-系统什么时候行动，什么时候等待：
-
-- 立即介入；
-- 延迟介入；
-- 先提出诊断问题；
-- 等待学生完成当前步骤；
-- 保持沉默。
-
-### D3：动作与支架强度
-
-系统可以提供的教学支持：
-
-```text
-L0：保持沉默
-L1：要求学生解释思路
-L2：提供概念线索
-L3：拆分任务子目标
-L4：提供局部下一步
-L5：提供不含最终答案的部分示例
+```powershell
+$env:PORT = '3001'
+npm start
 ```
 
-### D4：呈现与表征
+默认只监听本机。若需要在受控演示环境中从其他设备访问，可另设 `HOST`；当前版本没有账户和权限隔离，不用于真实班级数据。
 
-帮助可以通过以下形式呈现：
+## 试一遍学习流程
 
-- 题目旁提示；
-- 侧边栏；
-- 学习工作区；
-- 图像或公式；
-- 对话消息；
-- 结构化步骤卡片。
+1. 在练习题中选择错误答案并提交。第一次错误只给出对错反馈，连续两次错误后出现自我解释提示。
+2. 点击“再给一点线索”查看下一层提示，也可以收起提示或关闭本题主动提示。
+3. 答对练习题后进入独立验证。此时提示区清空，求助按钮不可用。
+4. 完成验证后查看本轮结果。“在提示后答对”和“验证题独立答对”分别记录。
 
-### D5：学生自主权
+演示状态只保存在当前页面，刷新会重新开始。错误次数、冷却时间和提示预算用于演示规则，不代表已经验证过的教学参数。
 
-学生可以：
+## 检查与测试
 
-- 接受帮助；
-- 拒绝帮助；
-- 稍后处理；
-- 请求换一种表达；
-- 关闭当前知识点的主动提示；
-- 恢复主动提示。
-
-### D6：独立学习证据
-
-系统通过以下结果判断帮助是否真正支持了学习：
-
-- 支架后的无提示验证；
-- 新题型下的近迁移；
-- 不同表征下的迁移；
-- 延迟保持；
-- 独立概念解释；
-- 独立方法选择。
-
-## 产品组成
-
-### 学生学习工作区
-
-- 章节和知识点导航；
-- 课程讲解材料；
-- 课堂练习；
-- 形成性测验；
-- 主动帮助；
-- 分级支架；
-- 无提示验证；
-- 学习记录；
-- 知识点提醒控制。
-
-### 教师与研究控制台
-
-教师端不承担完整教务管理，而是用于：
-
-- 查看课程结构；
-- 查看知识点和常见误解；
-- 配置支架内容；
-- 回放一次主动决策；
-- 查看介入和沉默记录；
-- 查看学生接受、拒绝和忽略帮助；
-- 查看支架后的独立结果；
-- 导出匿名化数据。
-
-### 课程适配层
-
-课程内容通过适配层组织：
-
-```text
-Course Adapter
-├── Knowledge Points
-├── Learning Objectives
-├── Misconceptions
-├── Evidence Extractors
-├── Support Ladder
-├── Verification Tasks
-├── Representation Map
-└── Outcome Measures
+```powershell
+npm run check
+npm test
 ```
 
-## 评测思路
+`npm test` 运行全部单元和接口集成测试。也可用 `npm run test:unit`、`npm run test:integration` 分别运行。GitHub Actions 在推送和 Pull Request 时执行相同检查。
 
-### 过程指标
+## 接口示例
 
-- 主动介入率；
-- 保持沉默率；
-- 错误介入率；
-- 接受、拒绝和忽略帮助的比例；
-- 支架升级次数；
-- 主动关闭次数；
-- 支架后的独立尝试；
-- 支架后的错误重复率。
+`GET /api/health` 检查服务；`POST /api/decision/evaluate` 根据上下文返回决策。PowerShell 调用示例：
 
-### 学习结果
+```powershell
+$context = @{ consecutiveErrors = 2; misconceptionType = 'limit_equals_function_value' }
+$body = $context | ConvertTo-Json
+Invoke-RestMethod -Uri 'http://localhost:3000/api/decision/evaluate' -Method Post -ContentType 'application/json' -Body $body
+```
 
-- 无提示近端验证；
-- 新题型下的近迁移；
-- 不同表征下的迁移；
-- 延迟保持；
-- 独立概念解释；
-- 独立方法选择。
+响应示例：
 
-### 体验与安全
+```json
+{
+  "success": true,
+  "data": {
+    "action": "INTERVENE",
+    "level": 1,
+    "reasonCode": "REPEATED_ERRORS",
+    "reason": "连续错误达到阈值，先从自我解释开始。"
+  }
+}
+```
 
-- 学生是否觉得提示时机合适；
-- 学生是否觉得系统打断了思考；
-- 学生是否感到自己能够控制帮助；
-- 受保护测量中是否出现主动提示；
-- 学生关闭帮助后是否仍继续提示；
-- 决策和学习事件是否完整记录。
-
-提示次数、对话轮数和提示接受率只能作为过程指标，不能直接证明学生真正学会。
-
-## 技术方向
-
-| 层次 | 计划采用的技术 |
-|---|---|
-| 后端 | Node.js |
-| 前端 | HTML、CSS、JavaScript |
-| 数据存储 | SQLite 或轻量结构化数据库 |
-| 数学公式 | KaTeX |
-| 课程内容 | JSON 课程包和知识点图谱 |
-| Agent 核心 | 服务端状态机与可审计策略 |
-| AI 能力 | 可选 OpenAI-compatible 接口 |
-| 测试 | 单元测试、集成测试和浏览器测试 |
-| 分析 | 结构化事件日志、决策回放和匿名导出 |
-
-## 项目边界
-
-### 首期范围
-
-- 大学新生微积分；
-- 函数、极限、导数和积分；
-- 课堂练习和课后学习；
-- 学生学习工作区；
-- 轻量教师与研究控制台；
-- 主动帮助、保持沉默和分级支架；
-- 支架后的独立验证；
-- 决策记录和学习分析。
-
-### 暂不纳入首期
-
-- 完整学校教务系统；
-- 家长端；
-- 出勤和班级管理；
-- 正式考试中的自动提示；
-- 摄像头、麦克风和眼动采集；
-- 学生能力或人格自动评估；
-- 未经审核的自动教学内容；
-- 一次性覆盖所有学科。
+请求字段、默认值和错误响应见[接口说明](docs/software/接口说明.md)。演示接口不保存学习记录；调用方负责维护单题上下文。
 
 ## 仓库结构
 
 ```text
-edu-promaic/
-├── README.md
-├── LICENSE
-├── CONTRIBUTING.md
-├── .gitignore
-│
-├── docs/
-│   ├── requirements/
-│   │   ├── problem-definition.md
-│   │   ├── product-description.md
-│   │   ├── functional-spec.md
-│   │   └── domain-model.md
-│   │
-│   ├── design/
-│   │   ├── design-space.md
-│   │   ├── user-personas.md
-│   │   ├── user-journeys.md
-│   │   ├── course-design.md
-│   │   └── system-architecture.md
-│   │
-│   ├── evaluation/
-│   │   ├── evaluation-plan.md
-│   │   ├── metrics.md
-│   │   └── experiment-protocol.md
-│   │
-│   └── management/
-│       ├── team-plan.md
-│       ├── backlog.md
-│       ├── risk-register.md
-│       └── sprint-plan.md
-│
-├── apps/
-│   ├── learner/
-│   └── teacher-console/
-│
-├── packages/
-│   ├── agent-core/
-│   ├── contracts/
-│   ├── course-adapter/
-│   └── audit/
-│
-├── data/
-│   ├── course-packs/
-│   ├── knowledge-graphs/
-│   └── fixtures/
-│
-├── tests/
-│   ├── unit/
-│   ├── integration/
-│   └── browser/
-│
-└── .github/
-    ├── workflows/
-    ├── ISSUE_TEMPLATE/
-    └── pull_request_template.md
+docs/
+  requirements/   问题定义、功能与非功能规格、用户故事
+  algorithm/      规则策略、参数与选型依据
+  software/       架构、接口和原型说明
+  mgmt/           团队协作、迭代计划、风险与议题落实记录
+  retrospection/  阶段复盘
+code/
+  backend/        HTTP 服务和静态页面入口
+  frontend/       学生练习演示
+  core_engine/    不依赖网络或存储的决策逻辑
+tests/
+  unit/           决策规则测试
+  integration/    HTTP 接口测试
+.github/          自动检查、Issue 和 PR 模板
+data/             预留课程包、知识图谱与脱敏测试素材
 ```
 
-## 项目路线
+## 文档与协作
 
-### 阶段一：问题与需求定义
+- [问题定义与产品描述](docs/requirements/problem_definition.md)
+- [功能规格](docs/requirements/functional_spec.md) · [非功能规格](docs/requirements/nonfunctional_spec.md) · [用户故事](docs/requirements/user_stories.md)
+- [算法说明](docs/algorithm/research.md) · [系统架构](docs/software/architecture.md) · [原型说明](docs/software/prototype/README.md) · [课程设计](docs/software/课程设计.md)
+- [沟通管理](docs/mgmt/communication_mgmt_plan.md) · [迭代计划](docs/mgmt/迭代计划.md) · [风险管理](docs/mgmt/risk_mgmt_plan.md)
+- [本轮 issue 落实记录](docs/mgmt/议题落实记录.md) · [复盘记录](docs/retrospection/README.md)
 
-- 明确课堂场景；
-- 完成用户画像；
-- 完成问题定义；
-- 完成课程设计；
-- 完成功能规格；
-- 建立 GitHub Issues 和项目看板。
-
-### 阶段二：交互原型
-
-- 设计学生学习工作区；
-- 设计主动帮助卡片；
-- 设计支架回合；
-- 设计教师与研究控制台；
-- 设计决策回放页面。
-
-### 阶段三：微积分课程原型
-
-- 建立课程知识图谱；
-- 配置函数、极限、导数和积分内容；
-- 配置常见误解；
-- 配置支架内容；
-- 配置验证题和迁移题。
-
-### 阶段四：学习流程与评测
-
-- 接入学习事件；
-- 实现状态判断；
-- 实现帮助和沉默；
-- 实现支架升级和渐退；
-- 实现学生控制；
-- 实现独立验证；
-- 完成工程测试和课堂反馈。
-
-## 项目文档
-
-- [问题定义](docs/requirements/problem-definition.md)
-- [产品描述](docs/requirements/product-description.md)
-- [功能规格](docs/requirements/functional-spec.md)
-- [领域模型](docs/requirements/domain-model.md)
-- [课程设计](docs/design/course-design.md)
-- [设计空间](docs/design/design-space.md)
-- [用户画像](docs/design/user-personas.md)
-- [评测计划](docs/evaluation/evaluation-plan.md)
-- [项目管理](docs/management/project-plan.md)
-
-## 当前仓库范围
-
-仓库首期只包含项目设计、需求文档、课程方案和协作骨架，不包含学生个人数据、API 密钥或未经确认的实验结论。实现代码将在需求和交互原型评审后逐步加入。
-
-## License
-
-待团队确认。
+问题与建议统一提交到 [GitHub Issues](https://github.com/LJHSTO/edu-promaic/issues)。贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用 [MIT 许可证](LICENSE)。

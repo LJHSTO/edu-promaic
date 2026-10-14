@@ -1,7 +1,7 @@
 ---
 name: 功能或需求建议
 about: 提出新的课程、交互或系统功能
-title: "[Feature] "
+title: "[建议] "
 labels: requirements
 assignees: ''
 ---

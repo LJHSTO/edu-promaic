@@ -1,0 +1,27 @@
+{
+  "name": "edu-promaic",
+  "version": "0.1.0",
+  "description": "Edu ProMAIC: 面向大学新生微积分课堂的主动学习 Agent 系统",
+  "main": "code/core_engine/index.js",
+  "scripts": {
+    "start": "node code/backend/server.js",
+    "dev:backend": "node --watch code/backend/server.js",
+    "check": "node --check code/backend/server.js && node --check code/core_engine/decision_engine.js && node --check code/frontend/app.js",
+    "test": "node --test tests/unit/*.test.js tests/integration/*.test.js",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:integration": "node --test tests/integration/*.test.js"
+  },
+  "keywords": [
+    "education",
+    "ai-agent",
+    "calculus",
+    "scaffolding",
+    "active-learning"
+  ],
+  "author": "Edu ProMAIC Team",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  }
+}

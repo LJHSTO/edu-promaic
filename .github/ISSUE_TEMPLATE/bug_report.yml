@@ -1,0 +1,48 @@
+name: 缺陷报告
+description: 报告可以复现的运行或文档问题
+title: "[缺陷] "
+labels: [bug]
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 请提供操作系统、浏览器、Node.js 版本和提交版本。不要粘贴密钥或学生信息。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从启动服务开始，写出题目、操作顺序和触发条件。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 可补充脱敏的报错和截图。
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      description: 维护者确认后添加对应 priority 标签。
+      options:
+        - P0：保护状态或数据安全问题、主要流程完全不可用
+        - P1：常用功能受影响
+        - P2：有替代操作或轻微显示问题
+    validations:
+      required: true
+  - type: input
+    id: requirement
+    attributes:
+      label: 关联需求或议题
+      description: 如 FR-4.2、NFR-8 或已有 issue 编号。

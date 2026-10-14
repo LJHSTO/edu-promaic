@@ -1,0 +1,28 @@
+name: 自动检查
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: ${{ matrix.os }} / Node.js ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22, 24]
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 语法检查
+        run: npm run check
+      - name: 单元与接口测试
+        run: npm test

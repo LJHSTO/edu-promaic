@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edu ProMAIC · 微积分练习</title>
+  <link rel="icon" href="data:,">
+  <style>
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body { margin: 0; background: #f8fafc; color: #1e293b; font: 16px/1.65 "Microsoft YaHei", "PingFang SC", system-ui, sans-serif; }
+    header { background: #0f172a; color: white; padding: 1rem max(1rem, calc((100vw - 1000px) / 2)); }
+    h1 { font-size: 1.25rem; margin: 0; }
+    header p { color: #cbd5e1; margin: .25rem 0 0; font-size: .9rem; }
+    main { max-width: 1032px; margin: 2rem auto; padding: 0 1rem; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.5rem; }
+    .card { min-width: 0; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.5rem; }
+    h2 { margin: 0 0 1rem; font-size: 1.1rem; }
+    .math-block { background: #f1f5f9; padding: 1.25rem; border-radius: 6px; font-size: 1.3rem; }
+    fieldset { border: 0; padding: 0; margin: 1rem 0; }
+    legend { margin-bottom: .5rem; }
+    .options label { display: block; padding: .5rem; border-radius: 4px; cursor: pointer; }
+    .options label:hover { background: #f1f5f9; }
+    input { accent-color: #2563eb; }
+    button { border: 1px solid #2563eb; border-radius: 6px; background: #2563eb; color: white; font: inherit; font-size: .9rem; padding: .5rem .9rem; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    button.secondary { background: white; color: #334155; border-color: #cbd5e1; }
+    button.secondary:hover { background: #f1f5f9; }
+    button:disabled { opacity: .5; cursor: default; }
+    :focus-visible { outline: 3px solid #d97706; outline-offset: 3px; }
+    .actions { display: flex; flex-wrap: wrap; gap: .6rem; }
+    .agent-panel { border-top: 4px solid #3b82f6; }
+    .agent-status, .note { color: #64748b; font-size: .9rem; }
+    .scaffold-box { margin: 1rem 0; padding: 1rem; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 6px; }
+    #feedback { min-height: 3.3rem; margin: 1rem 0; }
+    .results { border-top: 1px solid #e2e8f0; margin-top: 1.5rem; padding-top: 1rem; }
+    .results p { margin: .3rem 0; }
+    footer { max-width: 1032px; margin: 0 auto 2rem; padding: 0 1rem; }
+    @media (max-width: 720px) { main { grid-template-columns: minmax(0, 1fr); margin-top: 1rem; } .card { padding: 1rem; } }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Edu ProMAIC · 微积分练习</h1>
+    <p>极限与连续性 · 先尝试，再看线索</p>
+  </header>
+  <main>
+    <section class="card" aria-labelledby="questionTitle">
+      <h2 id="questionTitle" tabindex="-1">练习：极限与函数值</h2>
+      <p id="stem"></p>
+      <div class="math-block" id="formula"></div>
+      <form id="answerForm">
+        <fieldset>
+          <legend id="question"></legend>
+          <div class="options" id="options"></div>
+        </fieldset>
+        <div class="actions">
+          <button id="submitBtn" type="submit">提交答案</button>
+          <button id="verifyBtn" type="button" hidden>进入独立验证</button>
+          <button id="restartBtn" type="button" hidden>重新练习</button>
+        </div>
+      </form>
+      <p id="feedback" role="status" aria-live="polite"></p>
+      <div class="results" aria-label="本轮结果">
+        <p id="practiceResult">练习：尚未完成</p>
+        <p id="verificationResult">验证：尚未开始</p>
+      </div>
+    </section>
+    <aside class="card agent-panel" aria-labelledby="agentTitle">
+      <h2 id="agentTitle">思路线索</h2>
+      <p class="agent-status" id="agentStatus">先独立试一试，需要时可以主动求助。</p>
+      <p class="scaffold-box" id="scaffoldContent" hidden></p>
+      <div class="actions">
+        <button id="helpBtn" type="button">再给一点线索</button>
+        <button class="secondary" id="collapseBtn" type="button" disabled>收起线索</button>
+        <button class="secondary" id="muteBtn" type="button">关闭本题主动提示</button>
+      </div>
+      <p class="note">线索会逐步增加。进入独立验证后，本题的提示将清空。</p>
+    </aside>
+  </main>
+  <footer class="note">本地演示 · 不采集身份信息 · 刷新页面会重新开始</footer>
+  <noscript>请启用 JavaScript 后使用练习演示。</noscript>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
