@@ -4,17 +4,17 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-339933)](https://nodejs.org/)
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-blue)](LICENSE)
 
-Edu ProMAIC 是面向大学新生微积分练习的主动学习辅助工具。学生反复出错时，它先问一个帮助梳理思路的问题，再逐步提供线索；提示后答对，还要做一道无提示变式题。
+知点（Edu ProMAIC）是一款主动学习工作台。学生在课程中阅读、操作和练习，按自己的偏好获得帮助，再通过一道新题检查理解。教师可以沿学习过程找到卡点，调整课程活动。
 
-目前仓库提供一个“极限与函数值”练习演示、规则决策接口和自动化测试。教师看板、持久化学习记录、完整课程包及模型接入仍在计划中，详见[功能规格](docs/requirements/functional_spec.md)。
+## 体验知点
 
-## 本次课堂展示：3 分钟原型 + 2 分钟技术
+[![观看知点体验视频](docs/software/media/原型封面.png)](docs/software/media/原型完整体验.mp4)
 
-[![打开原型完整体验](docs/software/media/原型封面.png)](docs/software/media/原型完整体验.mp4)
+[观看体验视频](docs/software/media/原型完整体验.mp4) · [交互原型](docs/software/walkthrough/index.html) · [产品设计](docs/software/产品设计.md) · [技术架构](docs/software/architecture.md) · [技术入门](docs/software/技术入门.md)
 
-[观看 2 分 28 秒体验视频](docs/software/media/原型完整体验.mp4) · [可交互设计样机](docs/software/walkthrough/index.html) · [原型设计与讲法](docs/software/原型设计与展示.md) · [六层技术架构](docs/software/architecture.md) · [技术入门与必讲重点](docs/software/技术入门与汇报重点.md)
+从一节“函数值与极限”开始：设置帮助偏好，动手探索图形，查看课程出处，完成独立练习，最后进入教师工作台回看过程。下载仓库后，打开 `docs/software/walkthrough/index.html` 即可体验。
 
-设计展示从微积分出发，通过学科包扩展其他课程。目标架构采用 React、NestJS、LangGraph、PostgreSQL + pgvector；当前运行演示保持原有依赖。设计样机可下载后直接打开 HTML，GitHub 页面提供视频与文档预览。
+技术设计采用 React、NestJS、LangGraph 和 PostgreSQL + pgvector，通过学科包扩展更多课程。仓库同时提供轻量规则服务与自动化测试，便于逐步接入完整学习流程。
 
 ## 本地运行
 
@@ -28,7 +28,7 @@ npm start
 
 在浏览器访问 [http://localhost:3000](http://localhost:3000)。页面与 API 由同一服务提供。停止服务时在终端按 `Ctrl+C`。
 
-第三周交互原型入口：[http://localhost:3000/prototype/](http://localhost:3000/prototype/)。包含学生学习工作台、教师合成数据筛选与回放、CSV 预览及等待/失败演示。教师预览未接入真实学习记录。
+规则交互原型入口：[http://localhost:3000/prototype/](http://localhost:3000/prototype/)。包含学生学习工作台、教师示例记录筛选与回放、CSV 预览，以及等待和失败恢复。
 
 端口被占用时，PowerShell 中可这样换端口：
 
@@ -37,7 +37,7 @@ $env:PORT = '3001'
 npm start
 ```
 
-默认只监听本机。若需要在受控演示环境中从其他设备访问，可另设 `HOST`；当前版本没有账户和权限隔离，不用于真实班级数据。
+默认只监听本机。接入班级前需完成账户与权限模块，详见[技术架构](docs/software/architecture.md)。
 
 ## 试一遍学习流程
 
@@ -46,7 +46,7 @@ npm start
 3. 答对练习题后进入独立验证。此时提示区清空，求助按钮不可用。
 4. 完成验证后查看本轮结果。“在提示后答对”和“验证题独立答对”分别记录。
 
-演示状态只保存在当前页面，刷新会重新开始。错误次数、冷却时间和提示预算用于演示规则，不代表已经验证过的教学参数。
+学习状态保存在当前页面，刷新会重新开始。提示根据错误次数、冷却时间和提示预算触发。
 
 ## 检查与测试
 
@@ -105,13 +105,13 @@ data/             预留课程包、知识图谱与脱敏测试素材
 
 ## 文档与协作
 
-第三周材料：[10 个 INVEST 故事与故事地图](docs/requirements/user_stories.md) · [交互原型与 UX](docs/software/prototype/README.md) · [六层目标架构](docs/software/architecture.md) · [两周学习里程碑](docs/mgmt/week3_learning_plan.md) · [交付核验与课堂展示](docs/mgmt/week3_delivery.md)。材料供教师评审，课堂确认待进行。
+开发资料：[用户故事](docs/requirements/user_stories.md) · [交互原型](docs/software/prototype/README.md) · [技术架构](docs/software/architecture.md) · [开发计划](docs/mgmt/week3_learning_plan.md) · [迭代记录](docs/mgmt/week3_delivery.md)。
 
 - [问题定义与产品描述](docs/requirements/problem_definition.md)
 - [功能规格](docs/requirements/functional_spec.md) · [非功能规格](docs/requirements/nonfunctional_spec.md) · [用户故事](docs/requirements/user_stories.md)
 - [算法说明](docs/algorithm/research.md) · [系统架构](docs/software/architecture.md) · [原型说明](docs/software/prototype/README.md) · [课程设计](docs/software/课程设计.md)
 - [沟通管理](docs/mgmt/communication_mgmt_plan.md) · [迭代计划](docs/mgmt/迭代计划.md) · [风险管理](docs/mgmt/risk_mgmt_plan.md)
-- [本轮 issue 落实记录](docs/mgmt/议题落实记录.md) · [复盘记录](docs/retrospection/README.md)
-- [课件第 40–43 页 Scrum 核验与实际配置](docs/mgmt/github_scrum_audit.md)
+- [任务记录](docs/mgmt/议题落实记录.md) · [复盘记录](docs/retrospection/README.md)
+- [GitHub 协作流程](docs/mgmt/协作流程.md)
 
 问题与建议统一提交到 [GitHub Issues](https://github.com/LJHSTO/edu-promaic/issues)。贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用 [MIT 许可证](LICENSE)。

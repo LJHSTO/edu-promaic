@@ -28,4 +28,4 @@
 
 2026-11-04 补核：#8/#9 已实际绑定现有 [GitHub Milestone #3](https://github.com/LJHSTO/edu-promaic/milestone/3)（11-10 至 11-23），跟踪负责人为 LJHSTO，具体开发人待团队认领。上表的 M-W3-1/M-W3-2 是该迭代下的自学子目标，截止日仍为 11-11/11-18；11-05 起的自学属于前置准备，没有新建同名 GitHub Milestones。
 
-第三周交付 #7 归入既有 Milestone #2（10-27 至 11-09）。用户登录后，#7/#8/#9/#11 已补入同一实际看板，关闭与合并自动移列均确认 On，新开放 Issue 自动入板已启用。配置修复由 [#11](https://github.com/LJHSTO/edu-promaic/issues/11) 与关联 PR 记录；#8/#9 继续保持待办，未将自学计划记为已执行。逐项证据见[Scrum 核验](github_scrum_audit.md)，第三周入口见[交付记录](week3_delivery.md)。旧迭代计划保留历史。
+学习工作台归入 Milestone #2；会话与事件、课程包与权限由 #8 和 #9 跟踪，安排在 Milestone #3。任务统一进入看板，按[协作流程](协作流程.md)推进。
