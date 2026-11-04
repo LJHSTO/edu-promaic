@@ -8,6 +8,14 @@ Edu ProMAIC 是面向大学新生微积分练习的主动学习辅助工具。�
 
 目前仓库提供一个“极限与函数值”练习演示、规则决策接口和自动化测试。教师看板、持久化学习记录、完整课程包及模型接入仍在计划中，详见[功能规格](docs/requirements/functional_spec.md)。
 
+## 本次课堂展示：3 分钟原型 + 2 分钟技术
+
+[![打开原型完整体验](docs/software/media/原型封面.png)](docs/software/media/原型完整体验.mp4)
+
+[观看 2 分 28 秒体验视频](docs/software/media/原型完整体验.mp4) · [可交互设计样机](docs/software/walkthrough/index.html) · [原型设计与讲法](docs/software/原型设计与展示.md) · [六层技术架构](docs/software/architecture.md) · [技术入门与必讲重点](docs/software/技术入门与汇报重点.md)
+
+设计展示从微积分出发，通过学科包扩展其他课程。目标架构采用 React、NestJS、LangGraph、PostgreSQL + pgvector；当前运行演示保持原有依赖。设计样机可下载后直接打开 HTML，GitHub 页面提供视频与文档预览。
+
 ## 本地运行
 
 需要 Node.js 22 或更新版本和随附的 npm。项目使用 Node.js 内置模块，没有需要安装的第三方依赖，也不需要模型密钥。
@@ -97,7 +105,7 @@ data/             预留课程包、知识图谱与脱敏测试素材
 
 ## 文档与协作
 
-第三周材料：[10 个 INVEST 故事与故事地图](docs/requirements/user_stories.md) · [交互原型与 UX](docs/software/prototype/README.md) · [八维技术选型](docs/software/architecture.md) · [两周学习里程碑](docs/mgmt/week3_learning_plan.md) · [交付核验与课堂展示](docs/mgmt/week3_delivery.md)。材料供教师评审，课堂确认待进行。
+第三周材料：[10 个 INVEST 故事与故事地图](docs/requirements/user_stories.md) · [交互原型与 UX](docs/software/prototype/README.md) · [六层目标架构](docs/software/architecture.md) · [两周学习里程碑](docs/mgmt/week3_learning_plan.md) · [交付核验与课堂展示](docs/mgmt/week3_delivery.md)。材料供教师评审，课堂确认待进行。
 
 - [问题定义与产品描述](docs/requirements/problem_definition.md)
 - [功能规格](docs/requirements/functional_spec.md) · [非功能规格](docs/requirements/nonfunctional_spec.md) · [用户故事](docs/requirements/user_stories.md)

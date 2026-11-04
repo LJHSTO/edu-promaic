@@ -1,0 +1,21 @@
+{
+  "name": "zhidian-course-film",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Edu ProMAIC 原型完整体验视频",
+  "scripts": {
+    "studio": "remotion studio Film.tsx --port 3322",
+    "render": "node 渲染.cjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.537",
+    "@remotion/media": "4.0.537",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.537"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/react": "19.2.7"
+  }
+}

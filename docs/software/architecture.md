@@ -1,122 +1,237 @@
-# 技术方案调研与系统架构
+# Edu ProMAIC 技术架构与课堂展示
 
-版本：0.3；日期：2026-11-04。第三周交付，对照课程 PDF 第 62、66–69 页。结论是当前单题 MVP 约束下的工程判断，没有跨框架性能实验或课堂效果实验。
+版本 1.0 · 2026-11-04 · 智能教育软件工程课程设计 · 设计评审稿
 
-## 1. 目标与已实现边界
+Edu ProMAIC 把课程讲解、交互探索、主动帮助和独立检查放进同一学习工作台。当前用“函数值与极限”说明产品，后续通过学科包扩展物理、编程和语言学习。学生可以决定帮助出现的时机、位置、起点及继续方式；教师根据过程记录改进课程。
 
-验证“独立尝试 → 可控线索 → 无提示变式验证 → 结果区分”的闭环。第三周提供可运行前端与规则接口；教师界面用 4 个合成会话。正式会话、权限、判分、数据库、模型仍待实现。
+**汇报入口：**[原型体验与 3 分钟讲法](原型设计与展示.md) · [原型视频](media/原型完整体验.mp4) · [可交互设计样机](walkthrough/index.html) · [技术入门与必讲重点](技术入门与汇报重点.md)。技术介绍只需讲下面六层图、选型表和第 6 节的一次 Agent 流程，详细内容用于答疑。
 
-基线 Node.js 22+，本轮用 24，CI 覆盖 22/24、Windows/Linux。原生 HTML/CSS/JavaScript 与 Node HTTP 无第三方运行依赖、密钥或 CDN，默认监听本机。数学式采用 MathML，浏览器能力参见 [MDN](https://developer.mozilla.org/en-US/docs/Web/MathML)，兼容证据限实际走查环境。
+> 本文定义课设目标架构；仓库现有运行演示仍使用原生前端、Node.js 规则接口和页面内存。PostgreSQL、框架与 RAG 在本轮完成设计展示，不执行数据库迁移。设计样机使用可重复的示例交互。
 
-## 2. 当前结构和请求过程
+## 1. 产品目标与功能
+
+| 优先级 | 功能 | 用户得到什么 |
+|---|---|---|
+| P0 | 课程与活动工作台 | 讲解、图形、题目在同一任务上下文中切换 |
+| P0 | 学生可调节的主动帮助 | 从判断依据、介入时机、支持起点、显示位置、控制方式、帮助后继续方式六方面选择 |
+| P0 | 课程 RAG 与工具支持 | 提示带课程出处，可跳回原段落，数值由工具计算 |
+| P0 | 独立检查与学习回顾 | 区分帮助后完成和新题独立完成，回看下一步学习安排 |
+| P1 | 教师课程与过程工作台 | 看学习过程、调整活动、审核并发布课程版本 |
+| P1 | 学科包 | 替换知识、活动、题目和工具，复用通用学习流程 |
+
+首个版本聚焦教师整理的课程内容；正式考试的成绩裁定由教师负责。课堂内容生成和课程发布在教师确认后生效。
+
+质量目标：帮助请求首次状态反馈 ≤1 秒；课程检索 P95≤1 秒，首条有用提示 P95≤8 秒；30 名学生并发练习；所有课程引用能定位版本与段落；独立检查期间不显示解题提示。以上为待测验收目标，验证方法见第 10 节。
+
+## 2. 开发与运行环境
+
+目标使用 TypeScript 5、Node.js 24 LTS；前端 React 19 + Vite，API NestJS 11，Agent 使用 LangGraph JS 1.x。数据为 PostgreSQL 17 + pgvector 0.8.x。目标版本在实施时固定到补丁号、npm lockfile、容器摘要与模型版本，现有 package.json 继续描述可运行规则演示。
+
+开发工具：VS Code、Git、GitHub、浏览器开发工具、OpenAPI/Swagger；AI 辅助生成后执行代码审查与测试。Windows 或 Linux 开发，Linux 部署；课程演示服务器以 4 vCPU / 8 GB 内存为起步预算，向量编码服务独立部署或按需调用，硬件需求由压测确认。
+
+外部服务只包括模型 API 和代码托管。`DATABASE_URL`、`LLM_API_KEY`、`EMBEDDING_BASE_URL` 通过服务端环境或部署密钥注入；浏览器只接收当前用户的会话数据。开发配置在不入库的 `.env` 中，仓库仅存字段说明。
+
+## 3. 总体架构：六层怎样连起来
 
 ```mermaid
-flowchart LR
-    P[docs/software/prototype 页面] --> UI[共享 frontend/app.js]
-    OLD[原有学生演示] --> UI
-    UI -->|JSON 上下文| HTTP[Node HTTP 固定路由]
-    HTTP --> RULE[纯规则引擎]
-    RULE -->|动作 等级 原因| UI
-    FIX[4 个合成会话] --> TEACH[教师筛选 回放 CSV 预览]
+flowchart TB
+  U[学生 / 教师浏览器] --> FE[前端交互层：React + TypeScript + Vite]
+  FE -->|HTTPS / JSON / SSE| API[API 层：NestJS · 会话、授权、课程与评价]
+  API --> AG[Agent 层：LangGraph JS · 主动策略 + RAG + 工具循环]
+  AG --> MODEL[模型层：统一适配器 · DeepSeek + BGE-M3]
+  AG --> DATA[数据层：PostgreSQL + pgvector · 业务表、知识片段、检查点]
+  API --> DATA
+  AG --> TOOLS[工具：课程检索 / 读活动 / 算数值 / 选变式题]
+  INFRA[基础设施：Docker Compose + Nginx + GitHub Actions + Sentry] -.运行与监测.-> FE
+  INFRA -.运行与监测.-> API
+  INFRA -.运行与监测.-> AG
+  INFRA -.备份与恢复.-> DATA
 ```
 
-| 模块 | 已实现职责 | 限制 |
-|---|---|---|
-| code/frontend/app.js | 作答、分级提示、保护阶段、结果、失败恢复 | 页面状态与判分，刷新清空，不能正式考试 |
-| docs/software/prototype | 学生工作台、教师合成预览、设计变量、异常演示 | 教师不读学生本轮状态，不是正式分析服务 |
-| code/backend/server.js | 同源页面/API、类型/大小检查、固定白名单 | 无账户、数据库或模型 |
-| code/core_engine | 优先级、阈值、预算、冷却 | 无网络/存储，调用方提供状态 |
-| tests | 规则、HTTP、合成统计和 CSV 边界 | 不代替教学审核或性能报告 |
-
-前端计算候选错误次数，有效响应后才提交状态；失败保留选择与旧计数。进入验证清空线索并设置保护。服务端目前信任客户端阶段，这是原型限制；后续必须以服务端会话覆盖请求中的阶段字段。
-
-## 3. 八个技术选型维度
-
-### 3.1 编排框架
-
-| 候选 | 适用情况 | 本项目选择 |
-|---|---|---|
-| 原生模块和显式状态机 | 少量固定阶段、规则需确定可测 | 当前采用，保留纯决策逻辑 |
-| LangGraph | 长流程、检查点、人工中断和恢复 | 后续审核工作流候选，当前不加依赖 |
-| LangChain Agent / CrewAI / AutoGen | 动态工具或多代理自治 | 当前无必要的自治分工，不增加不确定流程 |
-
-[LangGraph 官方文档](https://docs.langchain.com/oss/javascript/langgraph/overview)说明其有状态编排、持久化和人工介入能力；这是后续考虑理由，项目尚未接入。若审核需跨天恢复或多个外部工具形成长流程，再用相同故障集比较恢复正确性和维护成本。
-
-### 3.2 大模型选型
-
-| 路线 | 价值 | 限制和验证 |
-|---|---|---|
-| 固定模板与规则 | 内容可逐项审查，无在线 Token 调用 | 当前采用，不能自由对话 |
-| 托管 API，以 DeepSeek 为候选 | 不维护本地推理服务，提供 JSON 输出 | 不外发学生信息，测空响应、截断、越界和延迟 |
-| Ollama 加经许可本地模型 | 本地评测与控制数据去向 | 需核查许可、硬件和中文数学效果，无 GPU 实测 |
-
-[DeepSeek JSON Output](https://api-docs.deepseek.com/guides/json_mode/)说明配置及空白内容处理；[Ollama Structured Outputs](https://docs.ollama.com/capabilities/structured-outputs)支持 JSON Schema。结构正确不保证内容正确，因此模型只产生教师审核草稿。
-
-草稿限定为 problemId、level、text、sourceIds，不能改学生身份、答案、阶段或权限。后续冻结 20 道合成题 × 5 级提示的 100 项样本，比较来源有效率、答案泄露、人工接受率、失败率、P95 延迟；实际模型版本和价格在评测前冻结。3 秒失败回退审核模板，在线交互不无限重试。当前无依据评出最优模型。
-
-### 3.3 记忆与上下文
-
-当前页面内存；下一轮单机 PoC 优先调研 SQLite：Session 存阶段与版本，Attempt/Decision 存唯一事件号和顺序，不保存按键或自由草稿。短期只传必要状态，长期按事件回放，不反复发送全部历史给模型。
-
-localStorage 易被客户端改写；JSON 文件不便保证原子写入与去重；SQLite 的关系事务适合单机验证；PostgreSQL 可用于未来集中服务，增加部署维护。[SQLite 官方适用场景](https://www.sqlite.org/whentouse.html)区分本地与集中式数据库。选择是约束下推断，不是容量实验。驱动、锁等待、版本兼容在里程碑验证后锁定。
-
-NFR-6 的 30 天保存建议待教师确认；过期删除与导出评估完成前不接真实记录。当前无数据库，候选不等于采用。
-
-### 3.4 工具调用与集成
-
-当前只有 POST /api/decision/evaluate，类型、范围和 16 KiB 限制见[接口说明](接口说明.md)。后续白名单为读取课程包、判分、写事件、读取授权汇总，各自有 Schema、错误码、超时及权限上下文。
-
-OpenAPI 可描述 HTTP 契约；MCP 等到需要跨工具客户端复用时再评估，当前单体不必增加第二套协议。写操作先用 eventId 唯一键实现幂等，再允许有限重试。模型没有 SQL、Shell、任意 URL 权限；保存失败不能返回成功。
-
-### 3.5 检索增强 RAG
-
-当前单概念按 problemId/knowledgePointId/level 选固定审核模板，不需向量数据库。教材扩大后先建立元数据/关键词基线，再比较向量或混合检索；没有语料标注不宣称提升准确性。
-
-按知识点、定义、条件、例题、来源切分，保留页码、版本、审核状态。标答与验证题不能进入学生可检索集合。以至少 30 条教师确认查询比较 Recall@3、来源命中及答案泄露；基础召回不足再研究重排，未命中退回模板或说明暂无线索。
-
-### 3.6 部署与运行时
-
-单进程同源 HTTP，网络异步处理、规则同步计算。固定短提示无需 Token 流式，但展示等待并在 3 秒超时后恢复操作。固定白名单不开放整个 docs 目录。
-
-当前不加 Docker/Kubernetes；需统一环境时先验证单容器、持久卷和备份。SQLite 文件不直接跨节点共享，多实例前改共享数据库或重设持久化。当前不执行用户代码；未来引入执行工具须另设沙箱，不在宿主进程直接运行。
-
-### 3.7 成本与性能
-
-当前模型调用为 0，硬件、网络和维护并非零成本。以下均为预算假设，不是实际用量：
-
-| 场景 | 请求 | 输入/输出 Token | 每百万单价 p_in/p_out 的同币种费用 |
+| 层 | 选型与理由 | 输入 → 输出 | 依赖 |
 |---|---|---|---|
-| 30 人，每人每课 10 次，每次输入 800/输出 200 | 300 | 240,000 / 60,000 | 0.24×p_in + 0.06×p_out |
-| 离线 100 项提示样本，同长度假设 | 100 | 80,000 / 20,000 | 0.08×p_in + 0.02×p_out |
+| 前端交互层 | React + TypeScript + Vite；拆分可复用课件、帮助和教师组件，类型约束活动事件 | 点击、作答、图形状态 → 请求与界面反馈 | API；KaTeX、SVG/Canvas、Three.js |
+| API 层 | NestJS；课程、会话、评价按模块组织，统一参数校验与授权 | 身份、课程、事件 → 会话状态、Agent 流、结果 | Agent、PostgreSQL |
+| Agent 层 | LangGraph JS；显式节点、条件分支、检查点与暂停恢复适合学习过程 | 学习上下文、偏好 → 带出处的下一步行动 | 模型适配器、检索和专业工具 |
+| 模型层 | DeepSeek API 生成解释，BGE-M3 编码知识与查询；统一接口便于替换 | 任务与证据 → 结构化提示；文本 → 1024 维向量 | 托管生成 API、独立编码服务 |
+| 数据层 | PostgreSQL + pgvector；关系事务、JSONB 活动状态、向量检索在一个数据库管理 | 事件、来源、向量 → 会话恢复、课程证据、教师汇总 | 持久卷与备份 |
+| 基础设施层 | Docker Compose + Nginx；适合课程规模，部署路径短；Actions + Sentry 做检查与错误定位 | 镜像、配置、运行事件 → HTTPS 服务、构建结果与告警 | Linux 主机、数据库备份目录 |
 
-价格按供应商实际计费核查，不虚构已批准预算；设日调用上限，用尽回退固定模板。只缓存无身份的审核内容版本，不缓存跨学生验证结果。
+采用模块化单体：API 和 Agent 在同一 Node.js 应用中，向量编码作为独立服务。暂不需要 Kubernetes、独立向量数据库或多 Agent 团队。
 
-性能目标沿用 NFR-9/10：规则 P95≤10ms，30 用户接口 P95≤200ms，非预期 5xx<1%。预热后记录样本、环境及 P50/P95/P99；本轮功能测试不证明压测达标。1.2 秒等待是演示条件，不是实测延迟。
+```mermaid
+sequenceDiagram
+  participant S as 学生界面
+  participant A as API 与会话
+  participant G as 主动 RAG Agent
+  participant D as PostgreSQL / pgvector
+  participant M as 模型与工具
+  S->>A: 作答或操作事件 + 会话版本
+  A->>D: 保存事件与当前状态
+  A->>G: 课程、状态、偏好
+  G-->>S: 邀请帮助；学生可接受或暂缓
+  S->>A: 接受帮助
+  A->>G: 恢复当前学习循环
+  G->>D: 按课程版本检索并过滤证据
+  G->>M: 核验数值，生成有出处的线索
+  G-->>S: 提示 + 来源 + 操作建议
+  S->>A: 新操作或独立检查结果
+  A->>D: 更新会话，等待下一步
+```
 
-### 3.8 安全与数据边界
+架构决策：React 保留现有课件，通过活动适配器逐步接入；NestJS 复用现有纯规则模块；PostgreSQL 直接作为目标存储；LangGraph 把检索和等待学生这两类循环明确建模。代价分别是组件迁移、服务模块整理、数据库运维和状态图学习成本。
 
-当前无身份采集，教师会话和 CSV 标 synthetic。后续服务端区分学生、教师、维护者，校验班级授权。保存 phase、预算、序号、规则版本，覆盖客户端状态。
+<details>
+<summary>展开六层详细设计、数据模型与测试方案</summary>
 
-模型草稿须过来源白名单、Schema 和教师审核，提示注入不能改规则。密钥仅在服务端环境，禁止进入页面、日志和导出。按 NFR-5/6 实现最小采集、保存期及删除；这是工程设计，不是法律认证。
+## 4. 前端：把现有课件接进 React 工作台
 
-## 4. 目标结构与决策记录
+页面划分为课程首页、学生工作台、学习回顾和教师工作台。公共组件为 `CourseShell`、`ActivityViewport`、`PreferencePanel`、`AssistantPanel`、`CitationDrawer`、`IndependentCheck` 和 `SessionTimeline`。
+
+本地开关和折叠使用 React 状态；课程、会话等服务器状态用 TanStack Query；用 React Router 管理页面。统一 CSS 变量定义青绿主色、语义色、字号、间距与焦点。公式用 KaTeX；二维课件沿用 SVG/Canvas，三维活动保留 Three.js。
+
+已有 HTML 课件先放在 iframe 活动容器，由固定的 `postMessage` 契约传递 `activityId / revision / event / state`，校验 origin 和来源窗口。后续把常用图形控件迁为 React 组件，无需一次重写所有课程。
+
+请求用 fetch + JSON，帮助输出用 SSE 事件 `status / hint / citation / done / error`。浏览器显示“查找本节材料”“整理线索”等任务状态，不展示模型内部思维。失联保留作答与图形，提供重试；取消会终止本次请求。
+
+原型三层对应：界面层稳定保留课程导航、活动和助手；视觉层用统一组件与变量；体验层明确加载、成功、暂缓、失败和恢复。按钮支持键盘，引用可展开，移动端导航折叠，结果使用文字和图标共同表达。
+
+实施顺序：工作台壳与路由 → 活动适配器 → 偏好和帮助组件 → 学习回顾 → 教师课程管理。每步先复用当前规则 API，再连接目标服务。
+
+## 5. API：课程、会话与学习事件
+
+NestJS 模块分为 Auth、Course、Session、Assistant、Assessment 和 Teacher。由 DTO 校验输入，Guard 校验角色及课程权限，Service 执行业务，Repository 访问数据库。REST 契约用 OpenAPI 描述。
+
+| 目标接口 | 输入 | 输出 |
+|---|---|---|
+| POST /api/sessions | courseVersion、activityId | sessionId、phase、revision |
+| POST /api/sessions/:id/events | eventId、revision、操作或作答 | 新 revision、活动状态 |
+| PATCH /api/sessions/:id/preferences | 六维偏好及版本 | 保存后的偏好 |
+| POST /api/assistant/runs | sessionId、query、接受帮助动作 | runId |
+| GET /api/assistant/runs/:id/events | 已授权 runId | SSE 状态、提示、引用与结束 |
+| POST /api/sessions/:id/check | itemId、answer、eventId | 结果、下一活动 |
+| GET /api/teacher/courses/:id/sessions | 班级与筛选 | 已授权过程汇总 |
+
+事件结构包含 `eventId, sessionId, activityId, type, payload, revision`。服务端拥有阶段和标准答案；客户端上报当前操作。重复 eventId 返回原结果，旧 revision 返回 409 并重新拉取状态。400 提示输入问题；403 说明无访问权限；429 提示稍后重试；503 保留当前进度并提供审核过的基础线索。
+
+## 6. Agent：在 RAG 基础上接住学习过程
+
+### 6.1 从老师的 RAG 模式扩展
+
+基础 RAG 负责理解问题、检索、重排、补查、生成和引用校验。Edu ProMAIC 在入口加“学习状态与偏好”，在出口加“可执行的学习行动与学生反馈”。这样引用材料服务于当前活动，回答之后还有下一步。
 
 ```mermaid
 flowchart TD
-    S[学生页面] --> A[会话与班级授权]
-    T[教师页面] --> A
-    A --> P[服务端判分与阶段]
-    P --> R[规则策略]
-    P --> E[幂等事务事件]
-    C[版本化审核课程包] --> P
-    C --> R
-    E --> V[授权汇总与回放]
-    M[可选模型草稿] --> H[教师审核队列]
-    H --> C
+  E[提问 / 作答 / 活动事件] --> C[组装课程、学习状态、六维偏好]
+  C --> P{现在需要帮助吗}
+  P -->|继续探索 / 暂缓 / 独立检查| W[保存状态，等待新事件]
+  P -->|需要| I[按偏好邀请或响应主动求助]
+  I -->|接受| Q[理解问题，判断知识需求]
+  Q -->|需要课程知识| R[查询改写：当前概念 + 误解 + 活动条件]
+  R --> H[向量与关键词召回]
+  H --> F[权限、版本、题目用途过滤 + RRF 重排]
+  F --> S{证据是否足够}
+  S -->|不足，最多补查 2 次| R
+  S -->|仍不足| CL[说明缺哪条信息，回到课件或请学生澄清]
+  S -->|足够| T[按需调用读图、数值核验或选题工具]
+  Q -->|界面操作等无知识需求| T
+  T --> G[生成一条线索与可执行操作]
+  G --> V[校验引用、计算与提示级别]
+  V --> O[显示提示 / 来源 / 操作入口]
+  O --> W
+  CL --> W
+  W --> E
 ```
 
-ADR-01：原生前端/Node 单体先验证闭环。ADR-02：模型草稿与阶段控制分离。ADR-03：SQLite 是事件 PoC 优先候选，驱动待验证。ADR-04：合成教师预览与真实事件分离。
+**内层检索与工具循环**完成本次帮助：召回不够才补查，工具结果再送回生成节点。**外层学习循环**在学生回答、拖动或完成新题后继续；等待时保存检查点并结束本次执行，不空转调用模型。
 
-US-01–07/10 对应学生界面和规则，US-08–09 对应授权分析，FR-1.3/4.2、NFR-4/7 对应恢复。[两周计划](../mgmt/week3_learning_plan.md)列出学习、日期、产物和 Milestone；交互见[原型说明](prototype/README.md)，结果见[交付核验](../mgmt/week3_delivery.md)。
+### 6.2 模块、工具与记忆
 
-来源访问日期：2026-11-04。课程依据：[IntelligentSWEPractice](https://github.com/bettermorn/IntelligentSWEPractice)。上文官方文档支撑技术能力，取舍属于本项目分析，不是供应商背书。
+LangGraph 节点包括 `context → policy → retrieve → rerank → act → verify → respond → wait`。状态保存 `sessionId、courseVersion、phase、preferences、activityState、evidenceIds、lastAction、runId`。短期记忆保留当前任务与最近对话摘要；长期存学习事件、偏好和回顾结果。课程知识放在独立知识库，不把聊天历史当教材。
+
+| 工具 | 输入 | 输出与用途 |
+|---|---|---|
+| search_course | 课程版本、概念、查询 | 带页码、片段 ID 的材料；支持引用 |
+| read_activity | 当前会话与活动 | 图形参数与最近有效操作 |
+| evaluate_values | 已登记函数与合法采样点 | 数值表；交给学生比较趋势 |
+| choose_transfer_item | 概念、难度、排除题目 | 同概念新题；答案仅交评价服务 |
+
+例如学生把 f(1)=4 当成极限：策略先按偏好询问；RAG 找到本节对“附近趋势”的解释；工具给出 x=0.99/1.01 时的 1.99/2.01；助手请学生把点值移到 5，再比较两侧。学生作答后进入 g(x)=2x+1 的新题，自己判断极限为 3。
+
+提示词由角色、学习目标、课程片段、活动状态、学生偏好和输出 Schema 组成。输出字段为 `hint、action、citationIds`，来源必须是此次检索结果。程序决定阶段、权限和提示上限；模型负责语言解释与候选行动。工具只调用登记函数，不执行任意 SQL 或用户代码。一次 run 上限 4 次工具调用、2 次补查、20 秒；失败回到当前活动并给出可恢复操作。
+
+## 7. 模型层：生成与编码分开
+
+生成选择 DeepSeek API 的 `deepseek-flash` 作为课设首选，由统一 `generateHint(context, evidence)` 适配器调用；模型标识、超时和预算配置化。官方当前别名可能更新，实施评测时记录实际返回模型版本。向量编码选择 BAAI/BGE-M3，统一 `embed(texts)` 输出 1024 维向量；部署为服务后由 Node.js 调用。
+
+选择理由：托管生成降低部署负担，中文课程解释通过本项目题目集评估；BGE-M3 支持多语言编码，适合中文教材与符号周边文本。离线切片和在线查询使用同一编码版本；换模型需要重建索引。
+
+30 人 × 每课 10 次帮助约 300 次请求。若平均输入 1500、输出 250 token，总量约 45 万输入、7.5 万输出；费用为 `0.45 × 输入每百万单价 + 0.075 × 输出每百万单价`，另计编码。按课程版本缓存公共材料、限制补查与上下文长度，不跨学生缓存个性化答案。此处是容量预算，价格以调用时供应商计费为准。
+
+## 8. 数据层：PostgreSQL + pgvector
+
+PostgreSQL 作为业务与知识主存储；pgvector 保存向量并进行余弦距离检索，JSONB 存活动快照。课程音画文件存对象存储或受控资源目录，数据库保存地址、哈希和版本。
+
+| 表 | 关键字段 | 关系与作用 |
+|---|---|---|
+| users / enrollments | user_id、role、course_id | 学生和教师的课程访问关系 |
+| courses / course_versions | course_id、version、status | 发布版本固定课程内容 |
+| learning_sessions | session_id、user_id、phase、revision、preferences | 当前学习进度 |
+| learning_events | event_id UNIQUE、session_id、type、payload、created_at | 过程回放与幂等写入 |
+| attempts | session_id、item_id、answer、assistance、first_attempt | 分开辅助完成与独立表现 |
+| knowledge_chunks | chunk_id、course_version、source、page、purpose、text、embedding vector(1024) | RAG 材料与可核对出处 |
+| agent_runs / checkpoints | run_id、session_id、state、step、status | 暂停与恢复 |
+
+一次操作在事务内更新会话 revision 并写事件，冲突时回滚；连接池访问 PostgreSQL。小语料先做精确向量检索，增长后用 HNSW 并评估过滤后的召回。关键词检索用预先分词的中文字段 + PostgreSQL 全文检索，不能把默认英文词典直接用于中文；两路结果用 RRF 合并，按课程版本、概念邻近与用途过滤并重排。
+
+入库流程：教师课程材料 → 按定义/条件/例题切片 → 保留页码与章节 → 审核发布 → 编码 → 写表与索引。题目答案和独立检查答案不进入学生检索集合。返回引用包含 sourceId、版本、页码或段落，前端可以展开原文。
+
+学生只访问本人会话，教师按课程授权。模型输入使用会话代号和必要的任务状态；演示样机不采集姓名或上传文件。记录保存期按课程管理要求配置，支持导出和删除。
+
+## 9. 基础设施、部署与协作
+
+Linux 主机使用 Docker Compose 运行 Nginx、Node.js 应用、PostgreSQL 与编码服务；Nginx 负责 HTTPS 和同源入口，数据库使用持久卷。每日备份，版本发布前验证恢复；模型供应商故障时显示可重试状态。初期不引入 Redis，确有跨实例缓存需求后再加入。
+
+GitHub Actions 执行语法、单元、接口及文档检查；前端迁移后补 Vitest 与 Playwright 端到端流程。Sentry 收集脱敏错误，结构化日志记录 requestId、runId、检索耗时与 token 用量，避免记录密钥和完整学生对话。
+
+Scrum 使用现有 [Projects](https://github.com/users/LJHSTO/projects/1)、[Milestones](https://github.com/LJHSTO/edu-promaic/milestones) 和 Issues。五列流转、负责人、缺陷表单与 Fixes 关联见[40—43 页核验](../mgmt/github_scrum_audit.md)。实施变更通过 PR，并把验收结果放回对应任务。
+
+## 10. 测试与验收
+
+| 层次 | 检查方式 | 验收样例 |
+|---|---|---|
+| 交互 | Playwright 桌面/320px/键盘 | 接受、暂缓、关闭、引用展开、失败重试、取消重置 |
+| API 与数据库 | 合成会话集成测试 | 重传三次只保存一条；越权拒绝；重启恢复 |
+| RAG | 教师标注 30 条课程查询 | Recall@5、引用正确率、错误版本与答案过滤 |
+| Agent | 固定事件序列与故障工具 | 不足补查、上限结束、等待不空转、偏好生效 |
+| 性能 | 30 并发预热后统计 P50/P95 | 分开测 API、检索、模型和完整提示延迟 |
+| 教学内容 | 教师走查提示与新题 | 内容、难度、来源与独立检查目标一致 |
+
+当前可运行规则演示已有 20 项测试；目标架构的集成验收随实施逐步补齐。
+
+## 11. 主要风险与处理
+
+检索不到材料时澄清问题或返回课件；引用不匹配时拒绝该提示并回退审核内容；生成慢时先显示状态并允许取消；状态过期时重新读取服务端 revision。新增学科先完成内容与工具适配，再扩大覆盖范围。
+
+</details>
+
+## 12. 实施安排与两分钟讲稿
+
+目录规划：`web/` 放 React 界面，`server/` 放 NestJS 模块，`agent/` 放状态图和工具，`content/` 放学科包与入库脚本，`tests/` 放分层验收。现有目录暂保留，迁移时逐模块替换。
+
+顺序：工作台组件化 → PostgreSQL 会话与事件 → 课程 RAG → 主动策略与检查点 → 教师流程和学科包。自学任务沿用 [#8](https://github.com/LJHSTO/edu-promaic/issues/8)、[#9](https://github.com/LJHSTO/edu-promaic/issues/9)，详见[学习计划](../mgmt/week3_learning_plan.md)。
+
+**0:00—0:35，六层：**前端用 React、TypeScript 和 Vite，把课件、图形和助手组织成工作台。API 用 NestJS 处理课程、会话和权限。Agent 用 LangGraph 编排学习过程。模型层用 DeepSeek 生成解释、BGE-M3 编码材料。数据层用 PostgreSQL 加 pgvector，同时保存学习过程和课程知识。最后用 Docker Compose、Nginx、GitHub Actions 和 Sentry 负责部署与检查。
+
+**0:35—1:25，RAG 主动学习：**我们在课程 RAG 前后增加了学习过程。先读取题目、操作和帮助偏好，判断何时介入；学生接受后，检索当前课程，过滤并重排材料，不够时有限补查。模型根据材料提出一条操作建议，工具核对数值，引用可以展开。内层循环解决本次检索与工具任务；外层等待学生操作，再决定继续提示、换个解释或进入独立检查。
+
+**1:25—2:00，保存与扩展：**每次操作把状态和事件一起写进 PostgreSQL，返回后可以接着学。教师沿过程找到卡点并修改课程。扩展到物理或编程时，保留工作台、会话、Agent 和评价流程，更换学科包中的知识、活动、题目及工具。
+
+## 参考依据
+
+- [老师的技术架构模板](https://github.com/bettermorn/AIAgent/blob/main/docs/architecture.md)：按环境、总体架构、六层职责、测试及实施安排组织。
+- [RAG Agent 工作流](https://github.com/bettermorn/AIAgent/blob/main/docs/AIAgentConcept.md#9-rag-agent检索增强生成)：检索、重排、补查、生成与引用核验。
+- [React](https://react.dev/learn)、[Vite](https://vite.dev/guide/)、[NestJS](https://docs.nestjs.com/)、[LangGraph JS](https://docs.langchain.com/oss/javascript/langgraph/overview)。
+- [PostgreSQL 全文检索](https://www.postgresql.org/docs/17/textsearch.html)、[pgvector](https://github.com/pgvector/pgvector)、[BGE-M3](https://huggingface.co/BAAI/bge-m3)、[DeepSeek API](https://api-docs.deepseek.com/)。
+
+官方资料访问日期：2026-11-04。技术能力依据官方资料，组合与参数属于本项目设计。
