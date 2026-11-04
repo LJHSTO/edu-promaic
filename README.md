@@ -12,6 +12,8 @@
 
 [观看体验视频](docs/software/media/原型完整体验.mp4) · [交互原型](docs/software/walkthrough/index.html) · [产品设计](docs/software/产品设计.md) · [技术架构](docs/software/architecture.md) · [技术入门](docs/software/技术入门.md)
 
+https://github.com/user-attachments/assets/88507c7a-c416-4ac1-85a0-2b95fc526f21
+
 从一节“函数值与极限”开始：设置帮助偏好，动手探索图形，查看课程出处，完成独立练习，最后进入教师工作台回看过程。下载仓库后，打开 `docs/software/walkthrough/index.html` 即可体验。
 
 技术设计采用 React、NestJS、LangGraph 和 PostgreSQL + pgvector，通过学科包扩展更多课程。仓库同时提供轻量规则服务与自动化测试，便于逐步接入完整学习流程。
