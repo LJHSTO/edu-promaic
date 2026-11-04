@@ -6,9 +6,14 @@ import { ActiveDecisionEngine } from '../core_engine/index.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
 const staticAssets = new Map([
-  ['/', ['index.html', 'text/html; charset=utf-8']],
-  ['/index.html', ['index.html', 'text/html; charset=utf-8']],
-  ['/app.js', ['app.js', 'text/javascript; charset=utf-8']]
+  ['/', ['../frontend/index.html', 'text/html; charset=utf-8']],
+  ['/index.html', ['../frontend/index.html', 'text/html; charset=utf-8']],
+  ['/app.js', ['../frontend/app.js', 'text/javascript; charset=utf-8']],
+  ['/prototype/', ['../../docs/software/prototype/index.html', 'text/html; charset=utf-8']],
+  ['/prototype/index.html', ['../../docs/software/prototype/index.html', 'text/html; charset=utf-8']],
+  ['/prototype/prototype.css', ['../../docs/software/prototype/prototype.css', 'text/css; charset=utf-8']],
+  ['/prototype/prototype.js', ['../../docs/software/prototype/prototype.js', 'text/javascript; charset=utf-8']],
+  ['/prototype/teacher-preview.js', ['../../docs/software/prototype/teacher-preview.js', 'text/javascript; charset=utf-8']]
 ]);
 
 function sendJson(res, status, body) {
@@ -22,6 +27,12 @@ export function createServer({ engine = new ActiveDecisionEngine() } = {}) {
     res.setHeader('Cache-Control', 'no-store');
     const pathname = new URL(req.url, 'http://localhost').pathname;
 
+    if (req.method === 'GET' && pathname === '/prototype') {
+      res.writeHead(308, { Location: '/prototype/' });
+      res.end();
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/health') {
       sendJson(res, 200, { status: 'ok', service: 'edu-promaic-backend' });
       return;
@@ -29,7 +40,7 @@ export function createServer({ engine = new ActiveDecisionEngine() } = {}) {
     if (req.method === 'GET' && staticAssets.has(pathname)) {
       const [filename, type] = staticAssets.get(pathname);
       try {
-        const content = await readFile(new URL(`../frontend/${filename}`, import.meta.url));
+        const content = await readFile(new URL(filename, import.meta.url));
         res.writeHead(200, { 'Content-Type': type });
         res.end(content);
       } catch {

@@ -45,6 +45,19 @@ function updateControls() {
   byId('verifyBtn').disabled = busy;
   byId('muteBtn').textContent = userOptedOut ? '恢复本题提示' : '关闭本题主动提示';
   document.querySelectorAll('input[name="opt"]').forEach(input => { input.disabled = busy || phase === 'done'; });
+  byId('answerForm').setAttribute('aria-busy', String(busy));
+  const sourceNote = document.querySelector('.source-note');
+  if (sourceNote) {
+    sourceNote.hidden = protectedPhase;
+    if (protectedPhase) sourceNote.open = false;
+  }
+  if (byId('phaseLabel')) {
+    byId('phaseLabel').textContent = phase === 'practice' ? '独立尝试' : phase === 'verification' ? '无提示验证' : '本轮完成';
+    for (const [id, active] of [['stepPractice', phase === 'practice'], ['stepVerification', phase === 'verification'], ['stepResult', phase === 'done']]) {
+      if (active) byId(id).setAttribute('aria-current', 'step');
+      else byId(id).removeAttribute('aria-current');
+    }
+  }
 }
 
 function renderProblem() {
@@ -75,9 +88,20 @@ async function evaluate({ nextErrors = consecutiveErrors, requestedHelp = false,
   const activeElement = document.activeElement;
   busy = true;
   updateControls();
+  const previousStatus = byId('agentStatus').textContent;
+  byId('agentStatus').textContent = phase === 'verification' ? '正在确认作答，验证阶段不会提供线索…' : '正在检查是否需要线索，请稍候…';
+  byId('feedback').removeAttribute('data-error');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
   try {
+    const demoResponse = byId('demoResponse');
+    const demoMode = demoResponse?.value;
+    if (demoResponse) demoResponse.value = 'live';
+    if (demoMode === 'error') throw new Error('评审模拟连接失败');
+    if (demoMode === 'timeout') {
+      await new Promise((resolve, reject) => controller.signal.addEventListener('abort', () => reject(new Error('评审模拟超时')), { once: true }));
+    }
+    if (demoMode === 'slow') await new Promise(resolve => setTimeout(resolve, 1200));
     const response = await fetch('/api/decision/evaluate', {
       method: 'POST', signal: controller.signal,
       headers: { 'Content-Type': 'application/json' },
@@ -105,12 +129,12 @@ async function evaluate({ nextErrors = consecutiveErrors, requestedHelp = false,
       byId('scaffoldContent').textContent = hints[currentLevel];
       byId('scaffoldContent').hidden = false;
       byId('collapseBtn').textContent = '收起线索';
-    } else if (phase === 'practice') {
-      byId('agentStatus').textContent = result.data.reason;
-    }
+    } else byId('agentStatus').textContent = result.data.reason;
     return true;
   } catch {
     byId('feedback').textContent = '暂时无法连接提示服务，选择已保留。请稍后重试。';
+    byId('feedback').setAttribute('data-error', 'true');
+    byId('agentStatus').textContent = previousStatus;
     return false;
   } finally {
     clearTimeout(timeout);
@@ -130,6 +154,7 @@ byId('answerForm').addEventListener('submit', async event => {
     byId('feedback').textContent = '先选一个答案，再提交。';
     return;
   }
+  byId('feedback').removeAttribute('data-error');
   const problem = problems[phase];
   if (selected.value === problem.answer) {
     if (phase === 'practice') {
@@ -190,6 +215,7 @@ byId('verifyBtn').addEventListener('click', () => {
   lastInterventionAt = null; userOptedOut = false;
   byId('verifyBtn').hidden = true;
   byId('submitBtn').hidden = false;
+  byId('helpBtn').hidden = false;
   clearHint('独立验证中：本题不提供提示。');
   renderProblem();
   byId('questionTitle').focus();
