@@ -1,12 +1,12 @@
-# Edu ProMAIC 技术架构与课堂展示
+# Edu ProMAIC 技术架构
 
-版本 1.0 · 2026-11-04 · 智能教育软件工程课程设计 · 设计评审稿
+版本 1.1 · 2026-11-04
 
 Edu ProMAIC 把课程讲解、交互探索、主动帮助和独立检查放进同一学习工作台。当前用“函数值与极限”说明产品，后续通过学科包扩展物理、编程和语言学习。学生可以决定帮助出现的时机、位置、起点及继续方式；教师根据过程记录改进课程。
 
-**汇报入口：**[原型体验与 3 分钟讲法](原型设计与展示.md) · [原型视频](media/原型完整体验.mp4) · [可交互设计样机](walkthrough/index.html) · [技术入门与必讲重点](技术入门与汇报重点.md)。技术介绍只需讲下面六层图、选型表和第 6 节的一次 Agent 流程，详细内容用于答疑。
+[产品设计](产品设计.md) · [体验视频](media/原型完整体验.mp4) · [交互原型](walkthrough/index.html) · [技术入门](技术入门.md)
 
-> 本文定义课设目标架构；仓库现有运行演示仍使用原生前端、Node.js 规则接口和页面内存。PostgreSQL、框架与 RAG 在本轮完成设计展示，不执行数据库迁移。设计样机使用可重复的示例交互。
+本方案采用 React、NestJS、LangGraph JS 和 PostgreSQL + pgvector，按工作台、学习服务、课程知识与学科包逐步实施。仓库提供交互原型和规则服务作为开发起点。
 
 ## 1. 产品目标与功能
 
@@ -21,7 +21,7 @@ Edu ProMAIC 把课程讲解、交互探索、主动帮助和独立检查放进�
 
 首个版本聚焦教师整理的课程内容；正式考试的成绩裁定由教师负责。课堂内容生成和课程发布在教师确认后生效。
 
-质量目标：帮助请求首次状态反馈 ≤1 秒；课程检索 P95≤1 秒，首条有用提示 P95≤8 秒；30 名学生并发练习；所有课程引用能定位版本与段落；独立检查期间不显示解题提示。以上为待测验收目标，验证方法见第 10 节。
+质量目标：帮助请求首次状态反馈 ≤1 秒；课程检索 P95≤1 秒，首条有用提示 P95≤8 秒；30 名学生并发练习；所有课程引用能定位版本与段落；独立检查期间不显示解题提示。验证方法见第 10 节。
 
 ## 2. 开发与运行环境
 
@@ -73,7 +73,7 @@ sequenceDiagram
   S->>A: 接受帮助
   A->>G: 恢复当前学习循环
   G->>D: 按课程版本检索并过滤证据
-  G->>M: 核验数值，生成有出处的线索
+  G->>M: 计算并检查数值，生成有出处的线索
   G-->>S: 提示 + 来源 + 操作建议
   S->>A: 新操作或独立检查结果
   A->>D: 更新会话，等待下一步
@@ -88,7 +88,7 @@ sequenceDiagram
 
 页面划分为课程首页、学生工作台、学习回顾和教师工作台。公共组件为 `CourseShell`、`ActivityViewport`、`PreferencePanel`、`AssistantPanel`、`CitationDrawer`、`IndependentCheck` 和 `SessionTimeline`。
 
-本地开关和折叠使用 React 状态；课程、会话等服务器状态用 TanStack Query；用 React Router 管理页面。统一 CSS 变量定义青绿主色、语义色、字号、间距与焦点。公式用 KaTeX；二维课件沿用 SVG/Canvas，三维活动保留 Three.js。
+本地开关和折叠使用 React 状态；课程、会话等服务器状态用 TanStack Query；用 React Router 管理页面。统一 CSS 变量定义蓝色主色、语义色、字号、间距与焦点。公式用 KaTeX；二维课件沿用 SVG/Canvas，三维活动保留 Three.js。
 
 已有 HTML 课件先放在 iframe 活动容器，由固定的 `postMessage` 契约传递 `activityId / revision / event / state`，校验 origin 和来源窗口。后续把常用图形控件迁为 React 组件，无需一次重写所有课程。
 
@@ -133,7 +133,7 @@ flowchart TD
   F --> S{证据是否足够}
   S -->|不足，最多补查 2 次| R
   S -->|仍不足| CL[说明缺哪条信息，回到课件或请学生澄清]
-  S -->|足够| T[按需调用读图、数值核验或选题工具]
+  S -->|足够| T[按需调用读图、数值计算或选题工具]
   Q -->|界面操作等无知识需求| T
   T --> G[生成一条线索与可执行操作]
   G --> V[校验引用、计算与提示级别]
@@ -162,7 +162,7 @@ LangGraph 节点包括 `context → policy → retrieve → rerank → act → v
 
 ## 7. 模型层：生成与编码分开
 
-生成选择 DeepSeek API 的 `deepseek-flash` 作为课设首选，由统一 `generateHint(context, evidence)` 适配器调用；模型标识、超时和预算配置化。官方当前别名可能更新，实施评测时记录实际返回模型版本。向量编码选择 BAAI/BGE-M3，统一 `embed(texts)` 输出 1024 维向量；部署为服务后由 Node.js 调用。
+生成选择 DeepSeek API 的 `deepseek-flash` 作为生成服务，由统一 `generateHint(context, evidence)` 适配器调用；模型标识、超时和预算配置化。每次评测记录实际模型版本。向量编码选择 BAAI/BGE-M3，统一 `embed(texts)` 输出 1024 维向量；部署为服务后由 Node.js 调用。
 
 选择理由：托管生成降低部署负担，中文课程解释通过本项目题目集评估；BGE-M3 支持多语言编码，适合中文教材与符号周边文本。离线切片和在线查询使用同一编码版本；换模型需要重建索引。
 
@@ -194,7 +194,7 @@ Linux 主机使用 Docker Compose 运行 Nginx、Node.js 应用、PostgreSQL 与
 
 GitHub Actions 执行语法、单元、接口及文档检查；前端迁移后补 Vitest 与 Playwright 端到端流程。Sentry 收集脱敏错误，结构化日志记录 requestId、runId、检索耗时与 token 用量，避免记录密钥和完整学生对话。
 
-Scrum 使用现有 [Projects](https://github.com/users/LJHSTO/projects/1)、[Milestones](https://github.com/LJHSTO/edu-promaic/milestones) 和 Issues。五列流转、负责人、缺陷表单与 Fixes 关联见[40—43 页核验](../mgmt/github_scrum_audit.md)。实施变更通过 PR，并把验收结果放回对应任务。
+Scrum 使用现有 [Projects](https://github.com/users/LJHSTO/projects/1)、[Milestones](https://github.com/LJHSTO/edu-promaic/milestones) 和 Issues。五列流转、负责人、缺陷表单与 Fixes 关联见[协作流程](../mgmt/协作流程.md)。实施变更通过 PR，并把验收结果放回对应任务。
 
 ## 10. 测试与验收
 
@@ -215,23 +215,8 @@ Scrum 使用现有 [Projects](https://github.com/users/LJHSTO/projects/1)、[Mil
 
 </details>
 
-## 12. 实施安排与两分钟讲稿
+## 12. 实施安排
 
 目录规划：`web/` 放 React 界面，`server/` 放 NestJS 模块，`agent/` 放状态图和工具，`content/` 放学科包与入库脚本，`tests/` 放分层验收。现有目录暂保留，迁移时逐模块替换。
 
 顺序：工作台组件化 → PostgreSQL 会话与事件 → 课程 RAG → 主动策略与检查点 → 教师流程和学科包。自学任务沿用 [#8](https://github.com/LJHSTO/edu-promaic/issues/8)、[#9](https://github.com/LJHSTO/edu-promaic/issues/9)，详见[学习计划](../mgmt/week3_learning_plan.md)。
-
-**0:00—0:35，六层：**前端用 React、TypeScript 和 Vite，把课件、图形和助手组织成工作台。API 用 NestJS 处理课程、会话和权限。Agent 用 LangGraph 编排学习过程。模型层用 DeepSeek 生成解释、BGE-M3 编码材料。数据层用 PostgreSQL 加 pgvector，同时保存学习过程和课程知识。最后用 Docker Compose、Nginx、GitHub Actions 和 Sentry 负责部署与检查。
-
-**0:35—1:25，RAG 主动学习：**我们在课程 RAG 前后增加了学习过程。先读取题目、操作和帮助偏好，判断何时介入；学生接受后，检索当前课程，过滤并重排材料，不够时有限补查。模型根据材料提出一条操作建议，工具核对数值，引用可以展开。内层循环解决本次检索与工具任务；外层等待学生操作，再决定继续提示、换个解释或进入独立检查。
-
-**1:25—2:00，保存与扩展：**每次操作把状态和事件一起写进 PostgreSQL，返回后可以接着学。教师沿过程找到卡点并修改课程。扩展到物理或编程时，保留工作台、会话、Agent 和评价流程，更换学科包中的知识、活动、题目及工具。
-
-## 参考依据
-
-- [老师的技术架构模板](https://github.com/bettermorn/AIAgent/blob/main/docs/architecture.md)：按环境、总体架构、六层职责、测试及实施安排组织。
-- [RAG Agent 工作流](https://github.com/bettermorn/AIAgent/blob/main/docs/AIAgentConcept.md#9-rag-agent检索增强生成)：检索、重排、补查、生成与引用核验。
-- [React](https://react.dev/learn)、[Vite](https://vite.dev/guide/)、[NestJS](https://docs.nestjs.com/)、[LangGraph JS](https://docs.langchain.com/oss/javascript/langgraph/overview)。
-- [PostgreSQL 全文检索](https://www.postgresql.org/docs/17/textsearch.html)、[pgvector](https://github.com/pgvector/pgvector)、[BGE-M3](https://huggingface.co/BAAI/bge-m3)、[DeepSeek API](https://api-docs.deepseek.com/)。
-
-官方资料访问日期：2026-11-04。技术能力依据官方资料，组合与参数属于本项目设计。
