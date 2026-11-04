@@ -1,108 +1,37 @@
 {
-  "seconds": 124,
-  "silentMusicRanges": [
-    [
-      0,
-      5
-    ],
-    [
-      78,
-      83
-    ]
-  ],
-  "segments": [
-    {
-      "track": "groove",
-      "start": 5,
-      "end": 34,
-      "sourceOffset": 0,
-      "gain": 1
-    },
-    {
-      "track": "vastness",
-      "start": 34,
-      "end": 60,
-      "sourceOffset": 22,
-      "gain": 0.8
-    },
-    {
-      "track": "groove",
-      "start": 60,
-      "end": 78,
-      "sourceOffset": 35,
-      "gain": 0.9
-    },
-    {
-      "track": "vastness",
-      "start": 83,
-      "end": 93,
-      "sourceOffset": 60,
-      "gain": 0.7
-    },
-    {
-      "track": "dry-gin",
-      "start": 93,
-      "end": 124,
-      "sourceOffset": 8,
-      "gain": 0.95
-    }
-  ],
+  "seconds": 140,
+  "track": "Dreamy Jazz",
+  "author": "Francisco Alvear",
+  "source": "https://assets.mixkit.co/music/645/645.mp3",
+  "musicStart": 2.8,
+  "musicEnd": 139.211,
+  "sourceCuts": 0,
+  "readingGain": 0.82,
+  "gainRampSeconds": 6,
   "cues": [
     {
-      "second": 3.333,
+      "second": 2.2,
       "type": "click"
     },
     {
-      "second": 13.133,
+      "second": 11.5,
       "type": "click"
     },
     {
-      "second": 27,
-      "type": "swish"
-    },
-    {
-      "second": 36.167,
+      "second": 51.3,
       "type": "click"
     },
     {
-      "second": 46.5,
-      "type": "switch"
-    },
-    {
-      "second": 52.667,
-      "type": "swish"
-    },
-    {
-      "second": 63.333,
-      "type": "switch"
-    },
-    {
-      "second": 73.667,
-      "type": "chime"
-    },
-    {
-      "second": 78,
-      "type": "hit"
-    },
-    {
-      "second": 86.833,
+      "second": 93.1,
       "type": "click"
     },
     {
-      "second": 88.833,
-      "type": "chime"
-    },
-    {
-      "second": 104.833,
-      "type": "switch"
-    },
-    {
-      "second": 114.433,
+      "second": 114.2,
       "type": "click"
     },
     {
-      "second": 118,
-      "type": "hit"
+      "second": 132.7,
+      "type": "click"
     }
   ]
 }

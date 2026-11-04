@@ -1,0 +1,128 @@
+[
+  {
+    "id": "entry",
+    "seconds": 6,
+    "title": "进入知点",
+    "caption": "打开学习工作台，接着完成今天的课程。",
+    "chapter": "进入课程",
+    "sample": 2.2,
+    "click": 2.2
+  },
+  {
+    "id": "courses",
+    "seconds": 9,
+    "title": "我的课程",
+    "caption": "选择「函数值与极限」，查看目标与完整学习路线。",
+    "chapter": "进入课程",
+    "sample": 4.5,
+    "click": 5.5
+  },
+  {
+    "id": "preferences",
+    "seconds": 10,
+    "title": "帮助偏好",
+    "caption": "先设置帮助方式，什么时候出现、从哪里开始，都由你决定。",
+    "chapter": "帮助偏好",
+    "sample": 7.4
+  },
+  {
+    "id": "lesson",
+    "seconds": 12,
+    "title": "阅读与探索",
+    "caption": "读一段讲解，再把定义放回同一张图形。",
+    "chapter": "阅读与探索",
+    "sample": 8.5
+  },
+  {
+    "id": "attempt",
+    "seconds": 8,
+    "title": "作出判断",
+    "caption": "先作出自己的判断，系统保留你的尝试与操作。",
+    "chapter": "阅读与探索",
+    "sample": 6.5
+  },
+  {
+    "id": "help",
+    "seconds": 10,
+    "title": "主动帮助",
+    "caption": "助教先询问。你可以暂缓，也可以主动取一条线索。",
+    "chapter": "获得线索",
+    "sample": 7.5,
+    "click": 6.3
+  },
+  {
+    "id": "citation",
+    "seconds": 9,
+    "title": "查看课程出处",
+    "caption": "展开引用，直接看到这条线索对应的讲义原文。",
+    "chapter": "获得线索",
+    "sample": 6
+  },
+  {
+    "id": "explore",
+    "seconds": 13,
+    "title": "改变条件与观察",
+    "caption": "移动单点，比较两侧的数值：点值改变，趋势保持。",
+    "chapter": "图形验证",
+    "sample": 9.5
+  },
+  {
+    "id": "explain",
+    "seconds": 9,
+    "title": "写下自己的解释",
+    "caption": "把观察写成自己的解释，再提交判断。",
+    "chapter": "图形验证",
+    "sample": 7.5
+  },
+  {
+    "id": "check",
+    "seconds": 11,
+    "title": "独立检查",
+    "caption": "换一道同概念新题，独立完成后再查看解释。",
+    "chapter": "独立练习",
+    "sample": 9,
+    "click": 7.1
+  },
+  {
+    "id": "review",
+    "seconds": 10,
+    "title": "学习回顾",
+    "caption": "回看操作、帮助与独立作答，确定下一步怎么学。",
+    "chapter": "学习回顾",
+    "sample": 6.5
+  },
+  {
+    "id": "teacher",
+    "seconds": 11,
+    "title": "教师工作台",
+    "caption": "教师从课程概览进入具体会话，找到学生卡住的步骤。",
+    "chapter": "教师回看",
+    "sample": 7.8,
+    "click": 7.2
+  },
+  {
+    "id": "replay",
+    "seconds": 9,
+    "title": "过程回放",
+    "caption": "沿时间线回放作答和帮助，把共性问题转成课程调整。",
+    "chapter": "教师回看",
+    "sample": 6.8
+  },
+  {
+    "id": "publish",
+    "seconds": 8,
+    "title": "预览与发布",
+    "caption": "增加条件对比活动，预览后发布课程新版本。",
+    "chapter": "课程更新",
+    "sample": 6.8,
+    "click": 5.7
+  },
+  {
+    "id": "finish",
+    "seconds": 5,
+    "title": "继续学习",
+    "caption": "从一次课程体验，继续下一次探索。",
+    "chapter": "课程更新",
+    "sample": 3
+  }
+]
