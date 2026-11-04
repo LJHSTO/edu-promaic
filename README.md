@@ -104,5 +104,6 @@ data/             预留课程包、知识图谱与脱敏测试素材
 - [算法说明](docs/algorithm/research.md) · [系统架构](docs/software/architecture.md) · [原型说明](docs/software/prototype/README.md) · [课程设计](docs/software/课程设计.md)
 - [沟通管理](docs/mgmt/communication_mgmt_plan.md) · [迭代计划](docs/mgmt/迭代计划.md) · [风险管理](docs/mgmt/risk_mgmt_plan.md)
 - [本轮 issue 落实记录](docs/mgmt/议题落实记录.md) · [复盘记录](docs/retrospection/README.md)
+- [课件第 40–43 页 Scrum 核验与剩余看板操作](docs/mgmt/github_scrum_audit.md)
 
 问题与建议统一提交到 [GitHub Issues](https://github.com/LJHSTO/edu-promaic/issues)。贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。本项目采用 [MIT 许可证](LICENSE)。

@@ -26,4 +26,6 @@
 
 追踪入口：[第三周交付 #7](https://github.com/LJHSTO/edu-promaic/issues/7)、[M-W3-1 #8](https://github.com/LJHSTO/edu-promaic/issues/8)、[M-W3-2 #9](https://github.com/LJHSTO/edu-promaic/issues/9)。两个学习任务保持未完成，认领时记录执行人、US/FR/NFR、验收样例和里程碑编号。以 PR 提交笔记和 PoC，附环境及失败证据。
 
-本次 Milestone 已在本计划定义并建立 Issue 追踪；当前连接未提供创建 GitHub Milestones 对象的操作，未声称已新增网页上的 Milestones。第三周入口见[交付记录](week3_delivery.md)。旧迭代计划保留历史，不将旧日期写成本次承诺。
+2026-11-04 补核：#8/#9 已实际绑定现有 [GitHub Milestone #3](https://github.com/LJHSTO/edu-promaic/milestone/3)（11-10 至 11-23），跟踪负责人为 LJHSTO，具体开发人待团队认领。上表的 M-W3-1/M-W3-2 是该迭代下的自学子目标，截止日仍为 11-11/11-18；11-05 起的自学属于前置准备，没有新建同名 GitHub Milestones。
+
+第三周交付 #7 归入既有 Milestone #2（10-27 至 11-09）。看板尚缺当前卡片，Workflows 待复核，缺陷由 [#11](https://github.com/LJHSTO/edu-promaic/issues/11) 保持开放；不得仅凭已有 Issue 认为看板同步完成。逐项证据见[Scrum 核验](github_scrum_audit.md)，第三周入口见[交付记录](week3_delivery.md)。旧迭代计划保留历史，不将旧日期写成本次新承诺。
