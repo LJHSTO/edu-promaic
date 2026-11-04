@@ -20,6 +20,8 @@ npm start
 
 在浏览器访问 [http://localhost:3000](http://localhost:3000)。页面与 API 由同一服务提供。停止服务时在终端按 `Ctrl+C`。
 
+第三周交互原型入口：[http://localhost:3000/prototype/](http://localhost:3000/prototype/)。包含学生学习工作台、教师合成数据筛选与回放、CSV 预览及等待/失败演示。教师预览未接入真实学习记录。
+
 端口被占用时，PowerShell 中可这样换端口：
 
 ```powershell
@@ -94,6 +96,8 @@ data/             预留课程包、知识图谱与脱敏测试素材
 ```
 
 ## 文档与协作
+
+第三周材料：[10 个 INVEST 故事与故事地图](docs/requirements/user_stories.md) · [交互原型与 UX](docs/software/prototype/README.md) · [八维技术选型](docs/software/architecture.md) · [两周学习里程碑](docs/mgmt/week3_learning_plan.md) · [交付核验与课堂展示](docs/mgmt/week3_delivery.md)。材料供教师评审，课堂确认待进行。
 
 - [问题定义与产品描述](docs/requirements/problem_definition.md)
 - [功能规格](docs/requirements/functional_spec.md) · [非功能规格](docs/requirements/nonfunctional_spec.md) · [用户故事](docs/requirements/user_stories.md)

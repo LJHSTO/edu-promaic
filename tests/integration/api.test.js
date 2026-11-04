@@ -47,6 +47,28 @@ test('决策接口返回首级提示，保护状态同时抑制主动求助', as
   assert.equal((await protectedResponse.json()).data.action, 'SILENCE');
 });
 
+test('第三周原型固定路由可运行，文档与源码目录不整体开放', async t => {
+  const base = await startServer(t);
+  const redirect = await fetch(`${base}/prototype`, { redirect: 'manual' });
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers.get('location'), '/prototype/');
+  for (const [path, type, content] of [
+    ['/prototype/', /text\/html/, /teacherView/],
+    ['/prototype/index.html', /text\/html/, /answerForm/],
+    ['/prototype/prototype.css', /text\/css/, /prefers-reduced-motion/],
+    ['/prototype/prototype.js', /javascript/, /renderSessions/],
+    ['/prototype/teacher-preview.js', /javascript/, /synthetic/]
+  ]) {
+    const response = await fetch(base + path);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type'), type);
+    assert.match(await response.text(), content);
+  }
+  for (const path of ['/docs/mgmt/week3_delivery.md', '/prototype/README.md', '/code/backend/server.js']) {
+    assert.equal((await fetch(base + path)).status, 404);
+  }
+});
+
 test('无效 JSON、类型与范围返回 400，服务继续可用', async t => {
   const base = await startServer(t);
   for (const body of ['', '{', 'null', '[]', '{"consecutiveErrors":-1}', '{"userOptedOut":"false"}']) {
