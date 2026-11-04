@@ -14,3 +14,7 @@ Thumbs.db
 *.log
 .playwright-cli/
 output/playwright/
+
+output/
+docs/software/video/public/*.mp3
+docs/software/video/public/*.wav

@@ -72,3 +72,7 @@ Edu ProMAIC 是一个用于微积分练习的主动学习辅助工具。
 ## 7. 参考与需求去向
 
 本文按课程的 [5W1H 与痛点映射、产品描述要求](https://github.com/bettermorn/IntelligentSWEPractice/blob/main/courseware/pages/part1analyze.md)组织。功能条目见[功能规格](functional_spec.md)，质量目标见[非功能规格](nonfunctional_spec.md)。
+
+## 课设目标架构补充（2026-11-04）
+
+当前微积分案例向通用学习工作台扩展：保留可控帮助与独立验证，让学生从判断依据、介入时机、支持起点、显示位置、控制方式和帮助后继续六方面设置偏好。课程知识通过 RAG 为当前活动提供出处明确的线索。学科包承载不同课程的知识、活动、题目和工具；详细设计见[技术架构](../software/architecture.md)。

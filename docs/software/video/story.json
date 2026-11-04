@@ -1,0 +1,393 @@
+[
+  {
+    "name": "进入课程",
+    "caption": "从课程首页，进入“函数值与极限”。",
+    "file": "screen-0.png",
+    "duration": 6,
+    "from": [
+      800,
+      450
+    ],
+    "target": [
+      368.3671875,
+      486.3984375
+    ],
+    "click": true
+  },
+  {
+    "name": "学习工作台",
+    "caption": "左侧是课程路线，中间是活动，右侧是随时可用的帮助。",
+    "file": "screen-1.png",
+    "duration": 6,
+    "from": [
+      368.3671875,
+      486.3984375
+    ],
+    "target": [
+      1507,
+      161.0078125
+    ],
+    "click": true
+  },
+  {
+    "name": "帮助偏好",
+    "caption": "六个维度决定怎样获得帮助；学习过程中可以再调整。",
+    "file": "screen-2.png",
+    "duration": 9,
+    "from": [
+      1507,
+      161.0078125
+    ],
+    "target": [
+      468,
+      666.6640625
+    ],
+    "click": true
+  },
+  {
+    "name": "课程讲解",
+    "caption": "先看本节讲解，分清点上的值与附近的趋势。",
+    "file": "screen-3.png",
+    "duration": 4,
+    "from": [
+      468,
+      666.6640625
+    ],
+    "target": [
+      328,
+      282.40625
+    ],
+    "click": true
+  },
+  {
+    "name": "阅读概念",
+    "caption": "把概念放回具体活动，用操作检查自己的理解。",
+    "file": "screen-4.png",
+    "duration": 7,
+    "from": [
+      328,
+      282.40625
+    ],
+    "target": [
+      374.3671875,
+      629.8515625
+    ],
+    "click": true
+  },
+  {
+    "name": "独立尝试",
+    "caption": "先自己判断：x 趋近于 1，函数值趋近多少？",
+    "file": "screen-5.png",
+    "duration": 6,
+    "from": [
+      374.3671875,
+      629.8515625
+    ],
+    "target": [
+      729,
+      691.1796875
+    ],
+    "click": true
+  },
+  {
+    "name": "提交判断",
+    "caption": "选择 4，提交这一次判断。",
+    "file": "screen-6.png",
+    "duration": 4,
+    "from": [
+      729,
+      691.1796875
+    ],
+    "target": [
+      348,
+      756.6953125
+    ],
+    "click": true
+  },
+  {
+    "name": "可控介入",
+    "caption": "助手发现可能的混淆，先问你是否需要帮助。",
+    "file": "screen-7.png",
+    "duration": 8,
+    "from": [
+      348,
+      756.6953125
+    ],
+    "target": [
+      1413,
+      443.2421875
+    ],
+    "click": true
+  },
+  {
+    "name": "暂缓帮助",
+    "caption": "可以先自己试，助手尊重这次选择。",
+    "file": "screen-8.png",
+    "duration": 5,
+    "from": [
+      1413,
+      443.2421875
+    ],
+    "target": [
+      1296,
+      490.53125
+    ],
+    "click": true
+  },
+  {
+    "name": "接受帮助",
+    "caption": "需要时再接受一条线索。",
+    "file": "screen-9.png",
+    "duration": 4,
+    "from": [
+      1296,
+      490.53125
+    ],
+    "target": [
+      1289,
+      443.2421875
+    ],
+    "click": true
+  },
+  {
+    "name": "等待可感知",
+    "caption": "查找本节材料时，页面显示当前状态。",
+    "file": "screen-10.png",
+    "duration": 2,
+    "from": [
+      1289,
+      443.2421875
+    ],
+    "target": [
+      1289,
+      443.2421875
+    ],
+    "click": false
+  },
+  {
+    "name": "线索与出处",
+    "caption": "先读提示，再展开它引用的课程材料。",
+    "file": "screen-11.png",
+    "duration": 8,
+    "from": [
+      1289,
+      443.2421875
+    ],
+    "target": [
+      1298.078125,
+      496.59375
+    ],
+    "click": true
+  },
+  {
+    "name": "来源可核对",
+    "caption": "来源带章节、段落和版本，随时可以回到原文。",
+    "file": "screen-12.png",
+    "duration": 8,
+    "from": [
+      1298.078125,
+      496.59375
+    ],
+    "target": [
+      1275,
+      496.59375
+    ],
+    "click": true
+  },
+  {
+    "name": "动手观察",
+    "caption": "把实心点从 4 移到 5，比较附近的趋势。",
+    "file": "screen-13.png",
+    "duration": 4,
+    "from": [
+      762,
+      584
+    ],
+    "target": [
+      1110,
+      584
+    ],
+    "click": false,
+    "drag": true
+  },
+  {
+    "name": "参数变化",
+    "caption": "单点变了，两侧仍趋近 2。数值和图形一起帮助判断。",
+    "file": "screen-14.png",
+    "duration": 7,
+    "from": [
+      1119.734375,
+      583.796875
+    ],
+    "target": [
+      435.328125,
+      692.1796875
+    ],
+    "click": true
+  },
+  {
+    "name": "验证观察",
+    "caption": "把观察转成自己的答案。",
+    "file": "screen-15.png",
+    "duration": 4,
+    "from": [
+      435.328125,
+      692.1796875
+    ],
+    "target": [
+      348,
+      756.6953125
+    ],
+    "click": true
+  },
+  {
+    "name": "继续新题",
+    "caption": "当前题完成后，换一道同概念的新题。",
+    "file": "screen-16.png",
+    "duration": 5,
+    "from": [
+      348,
+      756.6953125
+    ],
+    "target": [
+      474.78125,
+      809.4375
+    ],
+    "click": true
+  },
+  {
+    "name": "独立检查",
+    "caption": "新题隐藏旧线索，这一次由学生独立判断。",
+    "file": "screen-17.png",
+    "duration": 8,
+    "from": [
+      474.78125,
+      809.4375
+    ],
+    "target": [
+      729,
+      501.4765625
+    ],
+    "click": true
+  },
+  {
+    "name": "提交新题",
+    "caption": "选择 3，提交独立检查。",
+    "file": "screen-18.png",
+    "duration": 4,
+    "from": [
+      729,
+      501.4765625
+    ],
+    "target": [
+      348,
+      566.9921875
+    ],
+    "click": true
+  },
+  {
+    "name": "独立结果",
+    "caption": "独立答对与提示后完成分别记录。",
+    "file": "screen-19.png",
+    "duration": 6,
+    "from": [
+      348,
+      566.9921875
+    ],
+    "target": [
+      374.3671875,
+      705.1328125
+    ],
+    "click": true
+  },
+  {
+    "name": "学习回顾",
+    "caption": "回看帮助方式和独立表现，再决定下一轮怎么学。",
+    "file": "screen-20.png",
+    "duration": 8,
+    "from": [
+      374.3671875,
+      705.1328125
+    ],
+    "target": [
+      533.3671875,
+      552.4921875
+    ],
+    "click": true
+  },
+  {
+    "name": "教师概览",
+    "caption": "教师看见班级结果，也保留未完成会话的分母。",
+    "file": "screen-21.png",
+    "duration": 7,
+    "from": [
+      533.3671875,
+      552.4921875
+    ],
+    "target": [
+      823,
+      458.671875
+    ],
+    "click": true
+  },
+  {
+    "name": "查找卡点",
+    "caption": "筛选需要再练的会话，查看具体学习过程。",
+    "file": "screen-22.png",
+    "duration": 5,
+    "from": [
+      823,
+      458.671875
+    ],
+    "target": [
+      765.1875,
+      557.9375
+    ],
+    "click": true
+  },
+  {
+    "name": "过程回放",
+    "caption": "从误解、接受帮助到独立表现，定位课程可以改进的地方。",
+    "file": "screen-23.png",
+    "duration": 7,
+    "from": [
+      765.1875,
+      557.9375
+    ],
+    "target": [
+      1023,
+      750.4609375
+    ],
+    "click": true
+  },
+  {
+    "name": "课程调整",
+    "caption": "预览修改，再由教师确认发布。",
+    "file": "screen-24.png",
+    "duration": 6,
+    "from": [
+      1023,
+      750.4609375
+    ],
+    "target": [
+      500,
+      537.8359375
+    ],
+    "click": true
+  },
+  {
+    "name": "发布完成",
+    "caption": "一轮学习体验，连接学生探索与教师课程改进。",
+    "file": "screen-25.png",
+    "duration": 7,
+    "from": [
+      500,
+      537.8359375
+    ],
+    "target": [
+      500,
+      537.8359375
+    ],
+    "click": false
+  }
+]

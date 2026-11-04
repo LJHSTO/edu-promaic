@@ -7,7 +7,7 @@
 | 时段 | 新技术与问题 | 官方材料 / 练习 | 可检查产物 |
 |---|---|---|---|
 | 11-05–11-06 | 服务端状态机、HTTP 契约，客户端不能解除验证 | [Node HTTP](https://nodejs.org/api/http.html)；设计 phase/eventId/sequence | 状态表、请求/错误 Schema、伪造阶段测试 |
-| 11-07–11-08 | SQLite 事务、唯一键、驱动兼容与锁等待 | [事务](https://www.sqlite.org/lang_transaction.html)、[适用场景](https://www.sqlite.org/whentouse.html)；临时库重传同事件三次 | PoC、版本锁定理由；只存一条，失败回滚 |
+| 11-07–11-08 | PostgreSQL 事务、唯一键、连接池与并发更新 | [事务](https://www.postgresql.org/docs/17/tutorial-transactions.html)、[并发控制](https://www.postgresql.org/docs/17/mvcc.html)；临时库重传同事件三次 | PoC、版本锁定理由；只存一条，失败回滚 |
 | 11-09–11-11 | 会话恢复、幂等事件、重启回放 | 合成会话重启服务，模拟存储失败 | M-W3-1 会话与事件 PoC 包 |
 | 11-12–11-13 | 课程包版本、来源、结构化模型草稿 | [DeepSeek JSON](https://api-docs.deepseek.com/guides/json_mode/)、[Ollama Schema](https://docs.ollama.com/capabilities/structured-outputs)；假响应测空值和越界 | 课程包 Schema、审核状态、无密钥故障夹具 |
 | 11-14–11-15 | 教师授权与统计分母 | 合成班级 A/B 隔离，未开始/首次失败/重试分开 | 授权矩阵、跨班级拒绝、统计测试 |
