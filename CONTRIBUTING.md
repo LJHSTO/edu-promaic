@@ -4,6 +4,8 @@
 
 先在 [Issues](https://github.com/LJHSTO/edu-promaic/issues)说明问题、验收条件和关联需求，再在[项目看板](https://github.com/users/LJHSTO/projects/1/views/3)认领。缺陷使用仓库的中文表单，维护者确认优先级后添加 `priority:P0/P1/P2` 标签。
 
+进入迭代前设置 Assignees 和真实 Milestone，并确认该 Issue 已成为项目卡片；只创建 Issue 不代表已进看板。维护跟踪人与开发执行人可分别说明。当前看板缺口及逐页证据见[Scrum 核验](docs/mgmt/github_scrum_audit.md)，未完成部分用 `Refs` 关联，保留开放状态。
+
 `main` 保存已检查的交付版本。日常修改建议从 `main` 建立 `codex/主题` 或团队约定的功能分支，通过 PR 评审；目前没有单独维护的 `develop` 分支。
 
 ## 修改约定
