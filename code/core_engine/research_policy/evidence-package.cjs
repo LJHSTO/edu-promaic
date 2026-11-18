@@ -28,6 +28,48 @@ function freezeTree(value) {
   if(value && typeof value==="object") {Object.values(value).forEach(freezeTree);Object.freeze(value);}
   return value;
 }
+function normalizeFacts(facts) {
+  if (!isNonemptyText(facts?.current_kp) || !isNonemptyText(facts?.event_type)) {
+    throw new TypeError("EvidencePackage: facts.current_kp and facts.event_type are required strings");
+  }
+  return freezeTree({
+    current_kp: String(facts.current_kp),
+    event_type: String(facts.event_type),
+    error_detail: facts.error_detail ? String(facts.error_detail) : "",
+    timestamp: Number.isFinite(facts.timestamp) ? facts.timestamp : null,
+    source: String(facts.source || "courseware_event"),
+    includes_hint_influence: Boolean(facts.includes_hint_influence),
+    observable_features: facts.observable_features ? JSON.parse(JSON.stringify(facts.observable_features)) : null,
+    references: Array.isArray(facts.references) ? JSON.parse(JSON.stringify(facts.references)) : []
+  });
+}
+
+function isNonemptyText(value) {
+  return typeof value === "string" && Boolean(value.trim());
+}
+
+function normalizeInference(inference) {
+  const score = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+  return Object.freeze({
+    target_state: String(inference.target_state || "unknown"),
+    need_help_now: score(inference.need_help_now),
+    interruptible_now: score(inference.interruptible_now),
+    confidence: score(inference.confidence)
+  });
+}
+
+function normalizeProvenance(provenance) {
+  return Object.freeze({
+    model_version: String(provenance.model_version || "rule-baseline-v1"),
+    evidence_window_seconds: typeof provenance.evidence_window_seconds === "number"
+      && Number.isFinite(provenance.evidence_window_seconds) && provenance.evidence_window_seconds >= 0
+      ? provenance.evidence_window_seconds : null,
+    generated_at: Date.now(),
+    calibrated: false,
+    score_semantics: "uncalibrated_rule_score"
+  });
+}
+
 class EvidencePackage {
   /**
    * @param {Object} params
@@ -37,30 +79,8 @@ class EvidencePackage {
    * @param {Object} [params.provenance] - 证据溯源元数据
    */
   constructor({ facts, inference = {}, missing = [], provenance = {} } = {}) {
-    if (!facts || !facts.current_kp || !facts.event_type) {
-      throw new Error("EvidencePackage: facts.current_kp and facts.event_type are strictly required");
-    }
-
-    // 事实强冻结：不可篡改
-    this.facts = freezeTree({
-      current_kp: String(facts.current_kp),
-      event_type: String(facts.event_type),
-      error_detail: facts.error_detail ? String(facts.error_detail) : "",
-      timestamp: typeof facts.timestamp === "number" && Number.isFinite(facts.timestamp) ? facts.timestamp : null,
-      source: String(facts.source || "courseware_event"),
-      includes_hint_influence: Boolean(facts.includes_hint_influence),
-      observable_features: facts.observable_features ? JSON.parse(JSON.stringify(facts.observable_features)) : null,
-      references: Array.isArray(facts.references) ? facts.references.map(value=>({...value})) : []
-    });
-
-    // 推断分离：工程估计
-    const score = value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
-    this.inference = Object.freeze({
-      target_state: String(inference.target_state || "unknown"),
-      need_help_now: score(inference.need_help_now),
-      interruptible_now: score(inference.interruptible_now),
-      confidence: score(inference.confidence)
-    });
+    this.facts = normalizeFacts(facts);
+    this.inference = normalizeInference(inference);
 
     this.missing = Object.freeze([...new Set([
       ...(Array.isArray(missing) ? missing.filter(value => typeof value === "string") : []),
@@ -68,15 +88,7 @@ class EvidencePackage {
       ...(this.facts.timestamp === null ? ["timestamp"] : [])
     ])]);
 
-    this.provenance = Object.freeze({
-      model_version: String(provenance.model_version || "rule-baseline-v1"),
-      evidence_window_seconds: typeof provenance.evidence_window_seconds === "number"
-        && Number.isFinite(provenance.evidence_window_seconds) && provenance.evidence_window_seconds >= 0
-        ? provenance.evidence_window_seconds : null,
-      generated_at: Date.now(),
-      calibrated: false,
-      score_semantics: "uncalibrated_rule_score"
-    });
+    this.provenance = normalizeProvenance(provenance);
 
     Object.freeze(this);
   }

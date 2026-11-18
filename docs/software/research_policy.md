@@ -15,3 +15,13 @@
 ```sh
 npm test
 ```
+
+审查版接受 JSON 兼容的证据资料。独立验证使用 `verification` 阶段，计时门控接收调用方维护的冷却截止时间；`cooldownMs` 是保留的策略配置值。支架的复查标识必须为非空字符串，泄露标记必须为布尔值。
+
+复跑导入范围的静态检查和重复检查（Node.js 22.13 或更新的受支持 LTS 版本）：
+
+```sh
+npx --yes eslint@10.15.0 --config tests/research-policy-eslint.config.mjs "code/core_engine/research_policy/*.cjs"
+npx --yes jscpd@5.4.3 --min-lines 6 --min-tokens 40 --format javascript code/core_engine/research_policy
+node --test --experimental-test-coverage --test-coverage-include='code/core_engine/research_policy/*.cjs' tests/unit/*.test.js tests/integration/*.test.js
+```

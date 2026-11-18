@@ -19,6 +19,26 @@ const SUPPORT_FUNCTIONS = Object.freeze([
   "worked_example_step"  // L5: 局部样例示范
 ]);
 
+function validateSupport({ depth, functionType, targetKp, contentText, remainingStudentTask, followupCheckId, leaksCurrentAnswer }) {
+  if (!SUPPORT_DEPTHS.includes(depth)) {
+    throw new TypeError("SupportAction: unknown support depth");
+  }
+  if (typeof leaksCurrentAnswer !== "boolean") {
+    throw new TypeError("SupportAction: leaksCurrentAnswer must be a boolean");
+  }
+  if (depth === "L0") return;
+  if (!SUPPORT_FUNCTIONS.includes(functionType)) {
+    throw new TypeError("SupportAction: unknown teaching function");
+  }
+  const fields = [targetKp, contentText, remainingStudentTask, followupCheckId];
+  if (fields.some(value => typeof value !== "string" || !value.trim())) {
+    throw new TypeError("SupportAction: target, content, independent task and check ID are required");
+  }
+  if (["L1", "L2", "L3"].includes(depth) && leaksCurrentAnswer) {
+    throw new TypeError("SupportAction: this support depth is forbidden from leaking the current answer");
+  }
+}
+
 class SupportAction {
   /**
    * @param {Object} params
@@ -41,32 +61,16 @@ class SupportAction {
     leaksCurrentAnswer = false,
     contentVersion = "v1.0"
   } = {}) {
-    if (!SUPPORT_DEPTHS.includes(depth)) {
-      throw new Error(`SupportAction: Invalid support depth "${depth}". Must be one of: ${SUPPORT_DEPTHS.join(", ")}`);
-    }
-    if (depth !== "L0" && !SUPPORT_FUNCTIONS.includes(functionType)) {
-      throw new Error(`SupportAction: Invalid function type "${functionType}". Must be one of: ${SUPPORT_FUNCTIONS.join(", ")}`);
-    }
-    if (depth !== "L0" && !followupCheckId) {
-      throw new Error("SupportAction: A valid followupCheckId is strictly required for fading verification");
-    }
-    if (depth !== "L0" && [targetKp, contentText, remainingStudentTask].some(value => typeof value !== "string" || !value.trim())) {
-      throw new Error("SupportAction: target, content and remaining independent task are required");
-    }
-
-    // 防答案泄露硬校验：L1-L3 严禁泄露当前题答案
-    if (["L1", "L2", "L3"].includes(depth) && leaksCurrentAnswer) {
-      throw new Error(`SupportAction: Support depth ${depth} is strictly forbidden from leaking the current answer.`);
-    }
-
+    validateSupport({ depth, functionType, targetKp, contentText, remainingStudentTask, followupCheckId, leaksCurrentAnswer });
+    const isSilent = depth === "L0";
     this.action_id = crypto.randomUUID();
     this.support_depth = depth;
-    this.support_function = depth === "L0" ? null : functionType;
+    this.support_function = isSilent ? null : functionType;
     this.target_kp = String(targetKp || "");
-    this.content_text = depth === "L0" ? "" : String(contentText);
-    this.student_must_still_do = depth === "L0" ? "" : String(remainingStudentTask);
-    this.followup_check_id = depth === "L0" ? null : String(followupCheckId);
-    this.leaks_current_answer = depth === "L0" ? false : Boolean(leaksCurrentAnswer);
+    this.content_text = isSilent ? "" : String(contentText);
+    this.student_must_still_do = isSilent ? "" : String(remainingStudentTask);
+    this.followup_check_id = isSilent ? null : String(followupCheckId);
+    this.leaks_current_answer = isSilent ? false : Boolean(leaksCurrentAnswer);
     this.content_version = String(contentVersion);
     this.created_at = Date.now();
 

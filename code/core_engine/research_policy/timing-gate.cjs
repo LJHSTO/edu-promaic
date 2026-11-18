@@ -18,6 +18,7 @@ const TIMING_ACTIONS = Object.freeze({
 const PROTECTED_PHASES = new Set([
   "pre",
   "post",
+  "verification",
   "transfer",
   "near_transfer",
   "far_transfer",
@@ -25,6 +26,55 @@ const PROTECTED_PHASES = new Set([
   "delayed",
   "delayed_retention"
 ]);
+
+function isScore(value) {
+  return Number.isFinite(value) && value >= 0 && value <= 1;
+}
+
+function silent(reason) {
+  return { action: TIMING_ACTIONS.SILENT, reason, candidate_formed: false };
+}
+
+function candidate(action, reason) {
+  return { action, reason, candidate_formed: true };
+}
+
+function restriction({ assessmentPhase, studentAuthority, cooldownState }) {
+  if (PROTECTED_PHASES.has(String(assessmentPhase).toLowerCase())) {
+    return silent("protected_assessment_phase");
+  }
+  if (studentAuthority?.is_kp_disabled === true || studentAuthority?.proactive_preference === "off") {
+    return silent("student_disabled_kp_proactivity");
+  }
+  const activeUntil = cooldownState?.activeUntil;
+  const now = Date.now();
+  if (Number.isFinite(activeUntil) && activeUntil > now) {
+    return { ...silent("cooling_down"), remaining_cooldown_ms: activeUntil - now };
+  }
+  return null;
+}
+
+function reflectionDecision({ interruptibility, threshold, atBoundary }) {
+  if (atBoundary && isScore(interruptibility) && interruptibility >= threshold) {
+    return candidate(TIMING_ACTIONS.BOUNDARY, "exploration_comparison_boundary");
+  }
+  return candidate(TIMING_ACTIONS.WAIT, "reflection_wait_for_boundary");
+}
+
+function practiceDecision({ need, interruptibility, atBoundary, helpNeedThreshold, interruptibilityThreshold }) {
+  if (![need, interruptibility].every(isScore)) {
+    return silent("required_evidence_missing");
+  }
+  if (need < helpNeedThreshold) {
+    return silent("help_need_below_threshold");
+  }
+  if (interruptibility < interruptibilityThreshold) {
+    return candidate(TIMING_ACTIONS.WAIT, "low_interruptibility_wait_for_boundary");
+  }
+  return atBoundary
+    ? candidate(TIMING_ACTIONS.BOUNDARY, "natural_task_boundary_reached")
+    : candidate(TIMING_ACTIONS.IMMEDIATE, "high_need_and_high_interruptibility");
+}
 
 class TimingGate {
   /**
@@ -37,15 +87,18 @@ class TimingGate {
     this.helpNeedThreshold = config.helpNeedThreshold ?? 0.70;
     this.interruptibilityThreshold = config.interruptibilityThreshold ?? 0.60;
     this.cooldownMs = config.cooldownMs ?? 300000;
+    if (!Number.isFinite(this.cooldownMs) || this.cooldownMs < 0) {
+      throw new TypeError("TimingGate: invalid cooldown duration");
+    }
     for (const value of [this.helpNeedThreshold, this.interruptibilityThreshold]) {
-      if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) throw new Error("TimingGate: invalid threshold");
+      if (!isScore(value)) throw new TypeError("TimingGate: invalid threshold");
     }
   }
 
   /**
    * 评估时机决策
    * @param {Object} params
-   * @param {import('./evidence-package').EvidencePackage} params.evidence
+   * @param {import('./evidence-package.cjs').EvidencePackage} params.evidence
    * @param {Object} [params.cooldownState] - 知识点冷却状态 { activeUntil: number }
    * @param {Object} [params.studentAuthority] - D5 学生授权状态 { is_kp_disabled: boolean }
    * @param {string} [params.assessmentPhase="practice"] - 当前所处阶段
@@ -53,88 +106,22 @@ class TimingGate {
    * @returns {{ action: string, reason: string, candidate_formed: boolean, remaining_cooldown_ms?: number }}
    */
   evaluate({ evidence, cooldownState, studentAuthority, assessmentPhase = "practice", atBoundary = false, verifiedReflectionOpportunity = false } = {}) {
-    if (!evidence || !evidence.inference) {
-      throw new Error("TimingGate: evidence package is required");
+    if (!evidence?.inference) {
+      throw new TypeError("TimingGate: evidence package is required");
     }
+    const blocked = restriction({ assessmentPhase, studentAuthority, cooldownState });
+    if (blocked) return blocked;
 
-    const { need_help_now, interruptible_now } = evidence.inference;
-    const now = Date.now();
-
-    // 1. 测量保护硬门控：测量阶段必须强制绝对沉默
-    if (PROTECTED_PHASES.has(String(assessmentPhase || "").toLowerCase())) {
-      return {
-        action: TIMING_ACTIONS.SILENT,
-        reason: "protected_assessment_phase",
-        candidate_formed: false
-      };
+    const { need_help_now: need, interruptible_now: interruptibility } = evidence.inference;
+    if (verifiedReflectionOpportunity) {
+      return reflectionDecision({ interruptibility, threshold: this.interruptibilityThreshold, atBoundary });
     }
-
-    // 2. 学生控制权硬门控：学生已显式关闭本知识点主动提醒
-    if (studentAuthority && (studentAuthority.is_kp_disabled === true || studentAuthority.proactive_preference === "off")) {
-      return {
-        action: TIMING_ACTIONS.SILENT,
-        reason: "student_disabled_kp_proactivity",
-        candidate_formed: false
-      };
-    }
-
-    // 3. 冷却期硬门控：处于冷却时间窗内
-    if (cooldownState && typeof cooldownState.activeUntil === "number" && cooldownState.activeUntil > now) {
-      return {
-        action: TIMING_ACTIONS.SILENT,
-        reason: "cooling_down",
-        remaining_cooldown_ms: cooldownState.activeUntil - now,
-        candidate_formed: false
-      };
-    }
-
-    // A verified comparison is an invitation opportunity, not a help-need estimate.
-    // All assessment, consent, cooldown and upstream policy guards still apply.
-    if(verifiedReflectionOpportunity) {
-      if(typeof interruptible_now!=='number'||interruptible_now<this.interruptibilityThreshold)
-        return {action:TIMING_ACTIONS.WAIT,reason:'reflection_wait_for_boundary',candidate_formed:true};
-      return {action:atBoundary?TIMING_ACTIONS.BOUNDARY:TIMING_ACTIONS.WAIT,reason:atBoundary?'exploration_comparison_boundary':'reflection_wait_for_boundary',candidate_formed:true};
-    }
-    if (![need_help_now, interruptible_now].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1)) {
-      return { action: TIMING_ACTIONS.SILENT, reason: "required_evidence_missing", candidate_formed: false };
-    }
-
-    // 4. 困难度未达标
-    if (need_help_now < this.helpNeedThreshold) {
-      return {
-        action: TIMING_ACTIONS.SILENT,
-        reason: "help_need_below_threshold",
-        candidate_formed: false
-      };
-    }
-
-    // 候选已形成 (Candidate Formed)
-    const candidate_formed = true;
-
-    // 5. 可打断性评估：需要帮助，但当前打断会破坏专注思路
-    if (interruptible_now < this.interruptibilityThreshold) {
-      return {
-        action: TIMING_ACTIONS.WAIT,
-        reason: "low_interruptibility_wait_for_boundary",
-        candidate_formed
-      };
-    }
-
-    // 6. 自然边界触发 vs 立即介入
-    if (atBoundary) {
-      return {
-        action: TIMING_ACTIONS.BOUNDARY,
-        reason: "natural_task_boundary_reached",
-        candidate_formed
-      };
-    }
-
-    return {
-      action: TIMING_ACTIONS.IMMEDIATE,
-      reason: "high_need_and_high_interruptibility",
-      candidate_formed
-    };
+    return practiceDecision({
+      need, interruptibility, atBoundary,
+      helpNeedThreshold: this.helpNeedThreshold,
+      interruptibilityThreshold: this.interruptibilityThreshold
+    });
   }
 }
 
-module.exports = { TimingGate, TIMING_ACTIONS, PROTECTED_PHASES };
+module.exports = { TimingGate, TIMING_ACTIONS, PROTECTED_PHASES: new Set(PROTECTED_PHASES) };
