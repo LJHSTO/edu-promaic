@@ -7,6 +7,7 @@ const stateSchema = Annotation.Root({
   steps: Annotation({ reducer: (history, events) => [...history, ...events], default: () => [] }),
   tools: Annotation({ reducer: (history, events) => [...history, ...events], default: () => [] }),
   reason: Annotation(),
+  policyReason: Annotation(),
   level: Annotation(),
   neighbors: Annotation(),
   passages: Annotation(),
@@ -27,7 +28,7 @@ function checkGuard({ input }) {
 function decide({ input }, engine) {
   const decision = engine.evaluate(input.decisionContext);
   return {
-    steps: ['policy'], level: decision.level, reason: decision.reasonCode,
+    steps: ['policy'], level: decision.level, policyReason: decision.reasonCode,
     outcome: decision.action === 'INTERVENE' ? 'pending' : 'silent'
   };
 }
@@ -58,14 +59,15 @@ async function expand({ input }, expandConcept) {
 async function retrieve({ input, level, neighbors }, search, broad = false) {
   const related = neighbors[0];
   const query = broad && related ? related.label : queryFor(input, level);
+  const steps = [broad ? 'retrieve-related' : 'retrieve'];
   try {
     const passages = await search.invoke({
       query, conceptId: focusConceptId, courseVersion: input.courseVersion, maxLevel: level, limit: 4
     });
     if (!Array.isArray(passages)) throw new TypeError('无效的检索结果。');
-    return { steps: [broad ? 'retrieve-related' : 'retrieve'], tools: [search.name], passages };
+    return { steps, tools: [search.name], passages, reason: null };
   } catch {
-    return { steps: ['retrieve'], tools: [search.name], reason: 'KNOWLEDGE_UNAVAILABLE' };
+    return { steps, tools: [search.name], reason: 'KNOWLEDGE_UNAVAILABLE' };
   }
 }
 
@@ -169,12 +171,12 @@ const liveTools = { expand: expandConceptTool, search: searchPassagesTool, contr
 export function createLearningAgent({ engine, approvedFallback, tools = liveTools, trustPassage = lookupKnowledge, planner }) {
   const graph = makeGraph({ engine, approvedFallback, tools, trustPassage, planner });
   return async input => {
-    const { hint, steps, tools, outcome, reason } = await graph.invoke({ input }, { recursionLimit: 12 });
+    const { hint, steps, tools, outcome, reason, policyReason } = await graph.invoke({ input }, { recursionLimit: 12 });
     const sourceIds = hint?.citations?.map(item => item.id) ?? [];
     return {
       hint: hint ?? null,
       trace: {
-        outcome, steps, tools, sourceIds, reason,
+        outcome, steps, tools, sourceIds, reason: reason ?? policyReason, policyReason: policyReason ?? null,
         memory: { pointValueErrors: input.memory.pointValueErrors, avoidedSources: input.memory.seenSourceIds.length }
       }
     };

@@ -19,7 +19,7 @@
 | 检查项 | 结果 | 依据 |
 |---|---|---|
 | 语法与静态检查 | 0 个错误，0 条警告 | `npm run check`、`npm run lint` |
-| 单元及接口回归 | 66 项通过 | 46 项单元测试和 20 项接口测试。覆盖发布与作答、事件重传、迟到线索、工具约束、跨班级访问、加密恢复和审计角色。 |
+| 单元及接口回归 | 77 项通过 | 57 项单元测试和 20 项接口测试。覆盖课堂流程、异步保护、记忆窗口、班级授权、审计检查点及备份恢复。 |
 | 教学材料检索 | 20 条标注样例通过 | 核对点值、邻域、左右极限、约分和连续性等查询的首条结果，另测版本限制、域外查询与引用隔离。 [检索测试](../../tests/unit/learning_knowledge.test.js#L10) |
 | 浏览器流程 | 通过 | 演示配置复核 11 个检查点，受保护配置通过 HTTPS 使用合成账号复核 5 个检查点。 [质量报告](code_quality.md) |
 | 重复代码及依赖 | 0 个重复片段，0 项已知依赖漏洞 | `npm run quality:duplicates` 与 `npm audit --audit-level=high`。 [扫描报告](code_quality.md) |
@@ -58,13 +58,16 @@
 | R05 | [规则引擎](../../code/core_engine/decision_engine.js#L66) | SM-C01。沉默条件与触发和预算判断合写。 | 先处理保护和关闭，再计算线索等级。用例覆盖独立验证、关闭、冷却和预算。 |
 | R06 | [会话幂等](../../code/backend/classroom.js#L263) | SM-V15。网络重试和多标签操作可能重复登记或覆盖进度。 | 按班级、持有人和创建键去重。作答按事件编号与会话版本核对。 [接口回归](../../tests/integration/api.test.js#L199) |
 | R07 | [异步提交](../../code/backend/classroom.js#L280) | SM-V15。提示检索期间学生可能已进入下一阶段。 | 以最新阶段和版本决定提交。验证用例在检索尚未返回时切换阶段，拒绝迟到线索和回放记录。 [并发测试](../../tests/integration/api.test.js#L278) |
-| R08 | [线索选择与校验](../../code/core_engine/learning_agent/agent.js#L84) | SM-V07。缺失字段、越界候选或错误的引用可能使线索脱离课包。 | 重新按版本获取匹配条目，核验等级与文本。材料不足时沿图谱补查，再用固定线索。数值工具使用独立例子。 [助手测试](../../tests/unit/learning_agent.test.js#L62) |
-| R09 | [会话记忆](../../code/core_engine/learning_agent/memory.js#L5) · [课堂回放](../../code/frontend/classroom.js#L399) | 需区分可观察作答、已使用来源和模型选材。 | 会话记忆检查最近 16 个事件，保留最多 6 个来源编号。回放呈现实际工具、引用与处理结果，供教师复查。 |
+| R08 | [线索选择与校验](../../code/core_engine/learning_agent/agent.js#L119) | SM-V07。缺失字段、越界候选或错误的引用可能使线索脱离课包。 | 重新按版本获取匹配条目，核验等级与文本。材料不足时沿图谱补查，再用固定线索。数值工具使用独立例子。 [助手测试](../../tests/unit/learning_agent.test.js) |
+| R09 | [会话记忆](../../code/core_engine/learning_agent/memory.js#L5) · [课堂回放](../../code/frontend/classroom.js#L399) | 近期错答与已用来源需要有明确的事件窗口。 | 会话记忆检查最近 16 个事件，保留最多 6 个来源编号。测试验证旧事件退出窗口、验证阶段误选不参与练习记忆及同级线索去重。 |
 | R10 | [模型选择](../../code/core_engine/learning_agent/agent.js#L91) · [外部调用](../../code/backend/model-planner.js#L34) | SM-V07。外部输出可能截断或选择候选集以外的材料。 | 响应限时限量，只接受完整 JSON 中的候选编号。超时或无效编号使用内置排序。适配器测试核对请求字段及选择边界。 [模型测试](../../tests/unit/learning_agent.test.js#L83) |
 | R11 | [课堂授权](../../code/backend/server.js#L196) · [会话归属](../../code/backend/classroom.js#L251) | 原型角色依赖页面切换，机构场景需要服务端权限。 | 受保护模式校验 RS256 访问令牌、签发方、受众、时间窗和鉴别等级。服务端名册决定班级角色，学生只能访问本人会话。 [授权回归](../../tests/integration/classroom_security.test.js#L130) |
 | R12 | [加密与读取](../../code/backend/classroom-protection.js#L61) | SM-V07。损坏快照或班级文件错配可能被当作有效状态。 | 按班级绑定 AES-256-GCM 认证数据，启动时鉴别版本、密文和业务结构。用例覆盖错误密码材料、错误班级、明文和写入回滚。 [存储与审计测试](../../tests/unit/classroom_protection.test.js#L37) |
-| R13 | [审计持久化](../../code/backend/classroom-audit.js#L62) · [审计结果](../../code/backend/server.js#L186) | 操作追溯需要限制字段并验证记录完整性。 | 先写入授权记录，响应完成后追加结果，写入结果失败时输出请求编号。启动时验证 HMAC 链，查询限审计员所在班级。完整旧快照回退检测与长期留存由独立日志平台承担。 [审计回归](../../tests/integration/classroom_security.test.js#L170) |
-| R14 | [文件容量](../../code/backend/classroom-protection.js#L9) · [审计容量](../../code/backend/classroom-audit.js#L8) | SM-V16。文件作为单进程存储时，容量与归档需要操作约定。 | 班级快照明文与审计日志各限 2 MiB。机构部署前配置容量告警、归档和恢复演练。 [部署要求](security.md#机构部署) |
+| R13 | [审计快照验证](../../code/backend/classroom-audit.js#L109) · [审计结果](../../code/backend/server.js#L187) | 操作追溯需要验证完整性，也要识别一份真实旧快照被当作当前记录。 | 授权与结果分别记录，读取限所属班级。归档前与独立保管的签名检查点比对，拒绝已确认历史的回退或分叉。 [审计测试](../../tests/unit/classroom_audit.test.js) |
+| R14 | [文件容量](../../code/backend/classroom-protection.js#L9) · [审计容量](../../code/backend/classroom-audit.js#L8) | SM-V16。文件作为单进程存储时，容量与归档需要操作约定。 | 班级快照明文与审计日志各限 2 MiB。部署方配置容量监控、集中留存及归档周期。 [归档流程](security.md#审计归档与备份恢复) |
+| R15 | [备份清单](../../code/backend/classroom-backup.js#L68) · [恢复入口](../../code/backend/classroom-backup.js#L126) | 恢复时要能发现缺件、替换和清单修改，并保护已有数据目录。 | 校验班级密文、审计链、文件摘要与清单认证码，验证通过后恢复到新目录。测试读回了课堂会话和审计记录。 [备份测试](../../tests/unit/classroom_backup.test.js) |
+| R16 | [线索回退](../../code/core_engine/learning_agent/agent.js#L134) | 介入策略的原因与执行阶段的故障应分别记录。 | 策略码说明为何启动帮助。回退码说明无材料、校验失败或图谱故障，保留实际执行步骤。 |
+| R17 | [Linux 服务单元](../../deployment/linux/edu-promaic.service) | 应用发布、密钥管理和数据写入分属不同权限。 | 通过独立运行账户、只读发布目录、专用数据目录和文件式凭证约束运行。 [部署流程](deployment.md) |
 
 ## 6. 复验与跟踪
 

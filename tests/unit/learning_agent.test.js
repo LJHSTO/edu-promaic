@@ -22,10 +22,15 @@ test('保护期和关闭状态在读取图谱及调用工具前停止', async ()
   let calls = 0;
   const expand = tool('expand', () => { calls++; });
   const agent = build({ tools: { expand } });
-  for (const options of [{ phase: 'verification' }, { helpEnabled: false }]) {
+  for (const [options, reason] of [
+    [{ phase: 'verification' }, 'PROTECTED_ASSESSMENT'],
+    [{ helpEnabled: false }, 'USER_OPTED_OUT']
+  ]) {
     const result = await agent(input({ ...options, requestedHelp: true }));
     assert.equal(result.hint, null);
     assert.equal(result.trace.outcome, 'blocked');
+    assert.equal(result.trace.reason, reason);
+    assert.equal(result.trace.policyReason, null);
     assert.deepEqual(result.trace.steps, ['guard']);
     assert.deepEqual(result.trace.tools, []);
   }
@@ -36,6 +41,8 @@ test('真实状态图使用已发布引用和独立数值工具', async () => {
   const result = await build()(input({ requestedHelp: true, currentLevel: 3 }));
   const { hint, trace } = result;
   assert.equal(trace.outcome, 'grounded');
+  assert.equal(trace.reason, 'REQUESTED_HELP');
+  assert.equal(trace.policyReason, trace.reason);
   assert.equal(hint.level, 4);
   assert.equal(hint.citations[0].courseVersion, courseVersion);
   assert.deepEqual(hint.example.nearby.slice(2), [[-0.01, 9.99], [0.01, 10.01]]);
@@ -43,20 +50,39 @@ test('真实状态图使用已发布引用和独立数值工具', async () => {
   assert.deepEqual(trace.sourceIds, [hint.citations[0].id]);
 });
 
-test('会话记忆保留可观察错选和有限的来源历史，用于避开重复材料', async () => {
-  const agent = build();
-  const firstHint = await agent(input({ requestedHelp: true }));
-  const history = [
-    { phase: 'verification', misconception },
-    { phase: 'practice', misconception, agent: firstHint.trace }
-  ];
-  const memory = projectLearningMemory(history, misconception);
-  assert.equal(memory.pointValueErrors, 2);
-  assert.deepEqual(memory.seenSourceIds, firstHint.trace.sourceIds);
-  const next = await agent(input({ requestedHelp: true, currentLevel: 1, memory }));
-  assert.equal(next.trace.memory.pointValueErrors, 2);
+test('会话记忆在同一提示等级优先选用近期未引用的候选', async () => {
+  const ids = ['punctured-neighborhood', 'nearby-domain-check'].map(key => `${courseVersion}/${key}`);
+  const passages = ids.map(id => lookupKnowledge({ id, courseVersion }));
+  const expand = tool('expand', () => []);
+  const search = tool('search', ({ maxLevel }) => {
+    assert.equal(maxLevel, 3);
+    return passages;
+  });
+  const agent = build({ tools: { expand, search } });
+  const firstHint = await agent(input({ requestedHelp: true, currentLevel: 2 }));
+  const memory = projectLearningMemory([{ phase: 'practice', agent: firstHint.trace }]);
+  const next = await agent(input({ requestedHelp: true, currentLevel: 2, memory }));
+  assert.equal(firstHint.hint.level, next.hint.level);
   assert.equal(next.trace.memory.avoidedSources, 1);
-  assert.notEqual(next.trace.sourceIds[0], firstHint.trace.sourceIds[0]);
+  assert.deepEqual(firstHint.trace.sourceIds, [ids[0]]);
+  assert.deepEqual(next.trace.sourceIds, [ids[1]]);
+});
+
+test('会话记忆只看最近 16 个事件及最近 6 个不同来源', () => {
+  const sourceEvent = id => ({ phase: 'practice', agent: { sourceIds: [id] } });
+  const history = [
+    { ...sourceEvent('expired'), misconception },
+    { ...sourceEvent('within-window'), misconception },
+    { phase: 'verification', misconception },
+    ...Array.from({ length: 7 }, (_, index) => sourceEvent(`recent-${index + 1}`)),
+    ...Array.from({ length: 6 }, () => ({ phase: 'practice' })),
+    sourceEvent('recent-4')
+  ];
+  assert.deepEqual(projectLearningMemory(history, misconception), {
+    misconception, pointValueErrors: 2,
+    seenSourceIds: ['recent-4', 'recent-7', 'recent-6', 'recent-5', 'recent-3', 'recent-2']
+  });
+  assert.equal(projectLearningMemory([...history, { phase: 'practice' }]).misconception, null);
 });
 
 test('主检索无匹配时按图谱邻接概念补查一次，无证据时提供固定提示', async () => {
@@ -67,8 +93,23 @@ test('主检索无匹配时按图谱邻接概念补查一次，无证据时提�
   assert.equal(queries.length, 2);
   assert.equal(queries[1], '左右极限');
   assert.equal(result.trace.outcome, 'fallback');
+  assert.equal(result.trace.reason, 'NO_APPROVED_PASSAGE');
+  assert.equal(result.trace.policyReason, 'REQUESTED_HELP');
   assert.deepEqual(result.trace.sourceIds, []);
   assert.equal(result.hint.text, '教学备用线索');
+});
+
+test('补查失败记录真实步骤和检索原因，保留政策触发原因', async () => {
+  const expand = tool('expand', () => [{ label: '左右极限' }]);
+  const search = tool('search', ({ query }) => {
+    if (query === '左右极限') throw new Error('课程检索暂不可用');
+    return [];
+  });
+  const { hint, trace } = await build({ tools: { expand, search } })(input({ consecutiveErrors: 2 }));
+  assert.equal(hint.text, '教学备用线索');
+  assert.deepEqual(trace.steps.slice(-3), ['retrieve', 'retrieve-related', 'fallback']);
+  assert.equal(trace.reason, 'KNOWLEDGE_UNAVAILABLE');
+  assert.equal(trace.policyReason, 'REPEATED_ERRORS');
 });
 
 test('检索结果缺字段或未命中审核材料时不能直接展示', async () => {
@@ -77,6 +118,7 @@ test('检索结果缺字段或未命中审核材料时不能直接展示', async
   const result = await build({ tools: { expand, search } })(input({ requestedHelp: true }));
   assert.equal(result.trace.outcome, 'fallback');
   assert.equal(result.trace.reason, 'CITATION_REJECTED');
+  assert.equal(result.trace.policyReason, 'REQUESTED_HELP');
   assert.equal(result.hint.text, '教学备用线索');
 });
 

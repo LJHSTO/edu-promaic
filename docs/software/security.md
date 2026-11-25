@@ -44,7 +44,7 @@
    }
    ```
 
-3. 为 `dataDirectory` 设置服务账号专有权限。使用机构密钥服务为 `CLASSROOM_STORE_KEY` 和 `CLASSROOM_AUDIT_KEY` 分别注入独立的 32 字节密钥，环境变量采用标准 Base64 编码。课堂数据目录由一个服务进程写入。班级快照明文和审计文件的上限分别为 2 MiB。机构部署需集中保存审计记录，设置容量告警并演练归档和恢复。
+3. 为 `dataDirectory` 设置服务账号专有权限。通过 `CLASSROOM_STORE_KEY_FILE` 和 `CLASSROOM_AUDIT_KEY_FILE` 提供两个凭证文件，分别保存独立的 32 字节密钥，使用标准 Base64 编码。也可由密钥服务直接注入 `CLASSROOM_STORE_KEY` 和 `CLASSROOM_AUDIT_KEY`。每项密钥选择一种注入方式。课堂数据目录由一个服务进程写入。 [Linux 部署示例](deployment.md)
 4. 启动受保护配置，按接入拓扑设置 `HOST` 和 `PORT`。通过机构登录服务完成浏览器登录，用三个角色分别验收学习、发布和审计操作，再用另一个班级确认访问隔离。
 
    ```bash
@@ -54,6 +54,33 @@
 
 `npm test` 验证令牌校验、同源写入、班级和会话隔离、加密恢复及审计读取。机构选择启用外部选材时，模型仅接收公开课包片段和提示等级。登录体验、证书信任链、身份目录、存储和日志接入应在目标环境使用验收账号验证。 [系统架构](architecture.md) · [代码质量报告](code_quality.md) · [代码评审记录](code_review.md)
 
+## 审计归档与备份恢复
+
+首次归档时，在可信环境运行 `classroom-audit.js export`，将审计快照和签名检查点交给独立的日志保管方。后续归档带上已保管的检查点。命令验证当前审计链是否延续已确认的历史，再写入新的归档文件。若历史被截短或分叉，命令返回错误。
+
+```bash
+export CLASSROOM_AUDIT_KEY_FILE=/etc/edu-promaic/credentials/audit-key
+checkpoint=$(node scripts/classroom-audit.js export \
+  --file /var/lib/edu-promaic/access-audit.json \
+  --checkpoint /srv/audit-custody/previous-checkpoint.json \
+  --out /srv/audit-custody/next-audit.json) && \
+  (set -C; printf '%s\n' "$checkpoint" > /srv/audit-custody/next-checkpoint.json)
+```
+
+首次可信归档省略 `--checkpoint`。复核时可用 `verify` 代替 `export`，保留 `--file` 和 `--checkpoint` 参数并省略 `--out`。归档目录和密钥按岗位分开保管。审计文件上限为 2 MiB，机构需配置容量监控、集中留存和归档周期。
+
+备份操作在维护窗口执行，先停止对课堂数据目录的写入。命令验证课程快照、审计链及备份清单，输出部门可独立保管的密文副本。恢复到新目录后，先用验收账号核对原会话及审计记录，再由变更流程切换正式数据目录。
+
+```bash
+export CLASSROOM_STORE_KEY_FILE=/etc/edu-promaic/credentials/store-key
+export CLASSROOM_AUDIT_KEY_FILE=/etc/edu-promaic/credentials/audit-key
+node scripts/classroom-backup.js backup /var/lib/edu-promaic /srv/edu-backups/run-001
+node scripts/classroom-backup.js verify /srv/edu-backups/run-001
+node scripts/classroom-backup.js restore /srv/edu-backups/run-001 /srv/edu-restore/run-001
+```
+
+备份和恢复使用全新目标目录。保管密钥时保留各备份对应的密钥版本，记录实际恢复用时以及可恢复的数据时间点。审计归档和课堂备份分别匹配机构的日志与学习数据留存策略。
+
 ## 等保三级对照
 
 项目以 GB/T 22239—2019 的第三级安全要求作为机构部署目标。运营单位依据实际业务影响和系统边界定级、办理备案，并将目标环境交由符合条件的测评机构按 GB/T 28448—2019 开展等级测评。云部署同时核对适用的云计算安全扩展要求和供应方责任。第三级系统每年至少测评、自查各一次，整改后保留可复核材料。 [定级与实施标准目录](https://openstd.samr.gov.cn/bzgk/std/std_list?p.p1=0&p.p2=%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%AD%89%E7%BA%A7%E4%BF%9D%E6%8A%A4&p.p90=circulation_date&p.p91=desc) · [安全基本要求](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=BAFB47E8874764186BDB7865E8344DAF) · [等级测评要求](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=7E736CDF4502B6FF1258DD250AA3EC8C) · [信息安全等级保护管理办法](https://www.miit.gov.cn/jgsj/xxjsfzs/xxgk/art/2020/art_a981907528694176a61b5b52c2d19895.html)
@@ -62,8 +89,8 @@
 |---|---|---|
 | 安全物理环境 | 部署边界和设备清单随机构配置确定 | 机房或云平台的环境、物理访问和容灾证明 |
 | 安全通信网络与区域边界 | HTTPS、同源写入和身份验证 | 网络拓扑、区域划分、出入口策略、传输保护、监测告警和模型访问边界 |
-| 安全计算环境 | 令牌验签、班级与会话授权、数据加密及练习阶段门控 | 机构多因素鉴别策略、OS 和服务加固、密钥管理、数据分类、备份与恢复演练 |
-| 安全管理中心 | 单独的审计员角色及审计记录完整性校验 | 安全日志集中采集和告警值守、访问分权、统一时钟与日志留存。相关网络日志按《网络安全法》第二十三条留存不少于六个月。 [现行网络安全法](https://shca.miit.gov.cn/zwgk/zcwj/flfg/art/2025/art_c502acb4374848e0a7752925c72fe775.html) |
+| 安全计算环境 | 令牌验签、班级与会话授权、快照加密、核验式备份恢复、练习阶段门控及 Linux 最小权限服务单元 | 机构多因素鉴别策略、OS 和服务加固、密钥管理、数据分类、备份与恢复演练 |
+| 安全管理中心 | 独立审计员角色、审计链、全量快照归档及检查点连续性校验 | 安全日志集中采集和告警值守、访问分权、统一时钟与日志留存。相关网络日志按《网络安全法》第二十三条留存不少于六个月。 [现行网络安全法](https://shca.miit.gov.cn/zwgk/zcwj/flfg/art/2025/art_c502acb4374848e0a7752925c72fe775.html) |
 | 安全管理制度、机构、人员、建设及运维 | 部署手册、权限边界、版本记录和质量检查 | 岗位职责、账号开通与撤销流程、变更审批、供应商管理、培训、应急演练和事件处置记录 |
 
 商用密码应用单独按系统适用规定管理。依法需要使用商用密码保护的系统，应由运营方制定密码应用方案、核对密码产品及服务要求，并开展商用密码应用安全性评估。 [信息系统密码应用基本要求](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=53282C88712CE157043B7A2C590278FC) · [商用密码应用安全性评估管理办法](https://www.sca.gov.cn/sca/xxgk/2023-10/07/content_1061109.shtml)

@@ -37,3 +37,10 @@ jobs:
         run: npm run quality:duplicates -- --threshold 0
       - name: 依赖审计
         run: npm audit --audit-level=high
+      - name: 检查 Linux 服务单元
+        if: runner.os == 'Linux'
+        run: |
+          unit_dir="$RUNNER_TEMP/edu-promaic-unit"
+          mkdir -p "$unit_dir"
+          sed "s|^ExecStart=/usr/bin/node |ExecStart=$(command -v node) |" deployment/linux/edu-promaic.service > "$unit_dir/edu-promaic.service"
+          systemd-analyze --man=no --recursive-errors=no verify "$unit_dir/edu-promaic.service"

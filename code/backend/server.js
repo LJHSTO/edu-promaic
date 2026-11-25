@@ -10,6 +10,7 @@ import { ClassroomError, createClassroom } from './classroom.js';
 import { hintAt } from './classroom-content.js';
 import { AccessError } from './access.js';
 import { loadProtectedProfile } from './protected-profile.js';
+import { readOperationalKeyText } from './classroom-protection.js';
 import { createModelPlanner } from './model-planner.js';
 
 const MAX_BODY_BYTES = 16 * 1024;
@@ -293,7 +294,9 @@ function launchServer(port, host) {
     const planner = createModelPlanner({ apiKey: process.env.DEEPSEEK_API_KEY, model: process.env.DEEPSEEK_MODEL });
     const agent = createLearningAgent({ engine, planner, approvedFallback: hintAt });
     const protectedProfile = profile === 'protected' ? loadProtectedProfile(process.env.CLASSROOM_SECURITY_CONFIG, {
-      engine, agent, storeKeyText: process.env.CLASSROOM_STORE_KEY, auditKeyText: process.env.CLASSROOM_AUDIT_KEY
+      engine, agent,
+      storeKeyText: readOperationalKeyText(process.env, 'CLASSROOM_STORE_KEY'),
+      auditKeyText: readOperationalKeyText(process.env, 'CLASSROOM_AUDIT_KEY')
     }) : undefined;
     server = createServer({ engine, agent, classroomFile, profile: protectedProfile });
   } catch (error) {

@@ -5,7 +5,8 @@ import {
 
 const version = 1;
 const tagBytes = 32;
-const maximumAuditBytes = 2 * 1024 * 1024;
+export const maximumAuditBytes = 2 * 1024 * 1024;
+export const classroomAuditDomain = 'edu-access';
 const outcomes = new Set(['allowed', 'success', 'denied', 'error']);
 const metadataKeys = new Set(['action', 'outcome', 'requestId', 'classId', 'actor']);
 
@@ -41,6 +42,9 @@ function makeSigner(secret, domain) {
     genesis: digest(['start']),
     sign({ sequence, at, previous, action, outcome, requestId, classId, actor }) {
       return digest([sequence, at, previous, action, outcome, requestId, classId, actor]);
+    },
+    signCheckpoint({ sequence, head }) {
+      return digest(['checkpoint', sequence, head]);
     }
   };
 }
@@ -59,20 +63,61 @@ function verifyRecord(record, sequence, previous, signer) {
   return record.tag;
 }
 
+function decodeAuditState(text, signer) {
+  if (typeof text !== 'string' || Buffer.byteLength(text) > maximumAuditBytes) {
+    throw new Error('审计文件大小不合法。');
+  }
+  const state = JSON.parse(text);
+  if (!isRecord(state) || Object.keys(state).length !== 3 || state.version !== version || !Array.isArray(state.records)) {
+    throw new Error('审计文件结构或版本不合法。');
+  }
+  if (text.trim() !== JSON.stringify(state)) throw new Error('审计文件编码不符合归档格式。');
+  const head = state.records.reduce((previous, record, index) =>
+    verifyRecord(record, index + 1, previous, signer), signer.genesis);
+  if (!sameTag(state.head, head)) throw new Error('审计链终点校验失败。');
+  return state;
+}
+
 function loadAudit(filePath, signer) {
   try {
-    const state = JSON.parse(readBoundedFile(filePath, maximumAuditBytes));
-    if (!isRecord(state) || Object.keys(state).length !== 3 || state.version !== version || !Array.isArray(state.records)) {
-      throw new Error('审计文件结构或版本不合法。');
-    }
-    const head = state.records.reduce((previous, record, index) =>
-      verifyRecord(record, index + 1, previous, signer), signer.genesis);
-    if (!sameTag(state.head, head)) throw new Error('审计链终点校验失败。');
-    return state;
+    return decodeAuditState(readBoundedFile(filePath, maximumAuditBytes), signer);
   } catch (error) {
     if (error.code === 'ENOENT') return { version, head: signer.genesis, records: [] };
     throw new Error('无法验证课堂审计文件。', { cause: error });
   }
+}
+
+function validateCheckpoint(checkpoint, domain, signer) {
+  if (!isRecord(checkpoint) || Object.keys(checkpoint).length !== 5 || checkpoint.version !== version
+      || checkpoint.domain !== domain || !Number.isSafeInteger(checkpoint.sequence) || checkpoint.sequence < 0) {
+    throw new Error('审计检查点结构或保护域不合法。');
+  }
+  try {
+    if (!sameTag(checkpoint.tag, signer.signCheckpoint(checkpoint))) throw new Error('签名不匹配。');
+  } catch (error) {
+    throw new Error('审计检查点签名校验失败。', { cause: error });
+  }
+}
+
+function verifyCheckpoint(checkpoint, state, domain, signer) {
+  validateCheckpoint(checkpoint, domain, signer);
+  if (checkpoint.sequence > state.records.length) throw new Error('审计快照早于已保存的检查点。');
+  const prefixHead = checkpoint.sequence === 0 ? signer.genesis : state.records[checkpoint.sequence - 1].tag;
+  if (!sameTag(checkpoint.head, prefixHead)) throw new Error('审计历史与已保存的检查点不一致。');
+}
+
+export function verifyAuditSnapshot({ text, key, domain = classroomAuditDomain, checkpoint } = {}) {
+  const signer = makeSigner(protectionKey(key, domain), domain);
+  const state = decodeAuditState(text, signer);
+  if (checkpoint !== undefined) verifyCheckpoint(checkpoint, state, domain, signer);
+  const next = { version, domain, sequence: state.records.length, head: state.head };
+  return { state, checkpoint: { ...next, tag: signer.signCheckpoint(next) } };
+}
+
+export function readAuditSnapshot({ filePath, ...options } = {}) {
+  if (typeof filePath !== 'string' || filePath.trim() === '') throw new TypeError('请配置课堂审计文件。');
+  const text = readBoundedFile(filePath, maximumAuditBytes);
+  return verifyAuditSnapshot({ ...options, text });
 }
 
 function projectAudit({ at, action, outcome, requestId, classId, actor }) {

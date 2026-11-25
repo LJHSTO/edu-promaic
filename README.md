@@ -42,7 +42,7 @@ npm start
 
 演示课堂接受回环连接，使用匿名会话。发布和作答记录保存在 `output/classroom.json`，也可通过 `CLASSROOM_FILE` 选择另一份记录。浏览器刷新或服务重启后可继续原会话。
 
-机构课堂使用受保护配置，在 HTTPS 上接入机构身份，根据班级分配师生及审计权限，并加密保存课堂记录。部署、验收和等保三级对照见[安全与部署](docs/software/security.md)。
+机构课堂使用受保护配置，在 HTTPS 上接入机构身份，根据班级分配师生及审计权限，并加密保存课堂记录。部署材料提供 Linux 最小权限运行配置、审计归档和备份恢复流程。 [Linux 部署](docs/software/deployment.md) · [安全与等保三级对照](docs/software/security.md)
 
 ## 试一遍学习流程
 

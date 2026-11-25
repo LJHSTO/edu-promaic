@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createSecretKey, randomBytes, randomUUID } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createSecretKey, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { closeSync, fstatSync, fsyncSync, mkdirSync, openSync, readSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -8,6 +8,34 @@ const nonceBytes = 12;
 const tagBytes = 16;
 const maximumPlaintextBytes = 2 * 1024 * 1024;
 export const maximumSealedBytes = Math.ceil(maximumPlaintextBytes * 4 / 3) + 256;
+
+export function readOperationalKeyText(environment, name) {
+  const value = environment[name];
+  const path = environment[`${name}_FILE`];
+  if (path === undefined) return value;
+  if (value !== undefined) throw new Error(`${name} 与 ${name}_FILE 只能配置一个。`);
+  try {
+    return readBoundedFile(path, 128).trim();
+  } catch (error) {
+    throw new Error(`无法读取 ${name}_FILE。`, { cause: error });
+  }
+}
+
+export function parseProtectionKey(value, name) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) {
+    throw new Error(`${name} 须为 32 字节密钥的 Base64 表示。`);
+  }
+  const key = Buffer.from(value, 'base64');
+  if (key.toString('base64') !== value) throw new Error(`${name} 使用非规范 Base64。`);
+  return key;
+}
+
+export function parseClassroomKeys(storeKeyText, auditKeyText) {
+  const storeKey = parseProtectionKey(storeKeyText, 'CLASSROOM_STORE_KEY');
+  const auditKey = parseProtectionKey(auditKeyText, 'CLASSROOM_AUDIT_KEY');
+  if (timingSafeEqual(storeKey, auditKey)) throw new Error('数据密钥与审计密钥须分别配置。');
+  return { storeKey, auditKey };
+}
 
 export function isSecurityIdentifier(value) {
   return typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,119}$/.test(value);

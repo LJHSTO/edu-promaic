@@ -30,7 +30,7 @@ function isSavedSession(session) {
     && session.events.every(isRecord);
 }
 
-function isSavedClassroom(classroom) {
+export function isSavedClassroom(classroom) {
   return isRecord(classroom)
     && typeof classroom.published === 'boolean'
     && Array.isArray(classroom.sessions)
