@@ -48,9 +48,19 @@ async function serveAsset(res, [filename, type]) {
   }
 }
 
-async function respond(res, operation, { status = 200, errorMessage, validateDecision }) {
+function sendCsv(res, status, csv) {
+  res.writeHead(status, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="classroom-results.csv"'
+  });
+  res.end(csv);
+}
+
+async function respond(res, operation, { status = 200, errorMessage, validateDecision, csv }) {
   try {
-    sendJson(res, status, { success: true, data: await operation() });
+    const data = await operation();
+    if (csv) sendCsv(res, status, data);
+    else sendJson(res, status, { success: true, data });
   } catch (error) {
     if (error instanceof ClassroomError) {
       sendJson(res, error.status, { success: false, error: error.message });
@@ -157,6 +167,8 @@ const classroomRoutes = new Map([
     execute: ({ room, req, owner }) => room.createSession(req.headers['idempotency-key'], owner) }],
   [`${CLASSROOM_PREFIX}/teacher`, { method: 'GET', action: 'teacher.summary', roles: teacherRoles,
     execute: ({ room }) => room.teacherOverview() }],
+  [`${CLASSROOM_PREFIX}/teacher/export`, { method: 'GET', action: 'teacher.export', roles: teacherRoles, csv: true,
+    execute: ({ room }) => room.teacherExport() }],
   [`${CLASSROOM_PREFIX}/audit`, { method: 'GET', action: 'audit.read', roles: ['auditor'], protectedOnly: true,
     execute: ({ profile, classId }) => profile.auditTrail(classId) }]
 ]);
@@ -228,7 +240,7 @@ function handleClassroom(req, res, url, classroom, profile) {
   const context = profile ? protectedContext(req, res, url, route, profile) : { room: classroom };
   if (!context) return;
   const execute = payload => respond(res, () => route.execute({ ...context, req, payload }),
-    { ...defaultError, status: route.status });
+    { ...defaultError, status: route.status, csv: route.csv });
   if (route.json) readJson(req, res, execute);
   else execute();
 }

@@ -343,6 +343,11 @@ function renderTeacher() {
   for (const metric of document.querySelectorAll('[data-metric]')) {
     metric.textContent = summary[metric.dataset.metric];
   }
+  const { firstPass, retryPass, verificationStarted, notSubmitted, pointValuePractice, pointValueVerification } = summary;
+  const verificationMetrics = byId('verificationMetrics');
+  const verificationText = `已提交验证 ${verificationStarted} 条，其中首次通过 ${firstPass} 条，重试后通过 ${retryPass} 条。`
+    + `另有 ${notSubmitted} 条尚未提交验证。误选点值的记录，练习 ${pointValuePractice} 条，独立验证 ${pointValueVerification} 条。`;
+  if (verificationMetrics.textContent !== verificationText) verificationMetrics.textContent = verificationText;
   byId('sessionsEmpty').hidden = Boolean(sessions.length);
   byId('recentSessions').replaceChildren(...sessions.toReversed().slice(0, 20).map(makeSessionRow));
   renderReplay();
@@ -536,6 +541,7 @@ byId('requestHint').addEventListener('click', () => sendEvent('help'));
 byId('toggleHelp').addEventListener('click', () => sendEvent('toggle-help'));
 byId('startSession').addEventListener('click', () => void runTask(startSession));
 byId('publishLesson').addEventListener('click', () => void runTask(publishLesson));
+byId('exportTeacher').href = `/api/classroom/teacher/export${classroomQuery}`;
 byId('reloadClassroom').addEventListener('click', refreshView);
 byId('refreshTeacher').addEventListener('click', refreshView);
 byId('retryButton').addEventListener('click', () => {

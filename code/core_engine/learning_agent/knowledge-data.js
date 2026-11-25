@@ -3,42 +3,45 @@ export const focusConceptId = 'limit-vs-point-value';
 
 const textbook = 'https://openstax.org/books/calculus-volume-1/pages/';
 const limits = {
+  id: 'openstax-limits',
   label: 'OpenStax《微积分》第 1 卷 §2.2 函数的极限',
   url: textbook + '2-2-the-limit-of-a-function'
 };
 const limitLaws = {
+  id: 'openstax-limit-laws',
   label: 'OpenStax《微积分》第 1 卷 §2.3 极限定律',
   url: textbook + '2-3-the-limit-laws'
 };
 const continuity = {
+  id: 'openstax-continuity',
   label: 'OpenStax《微积分》第 1 卷 §2.4 连续性',
   url: textbook + '2-4-continuity'
 };
 
-export const conceptLabels = new Map([
-  [focusConceptId, '函数值与极限'],
-  ['sided-limits', '左右极限'],
-  ['equivalent-nearby-expressions', '邻域内等价的表达式'],
-  ['continuity', '一点处的连续性'],
-  ['removable-discontinuity', '可去间断']
-]);
+const concepts = [
+  { id: focusConceptId, label: '函数值与极限' },
+  { id: 'sided-limits', label: '左右极限' },
+  { id: 'equivalent-nearby-expressions', label: '邻域内等价的表达式' },
+  { id: 'continuity', label: '一点处的连续性' },
+  { id: 'removable-discontinuity', label: '可去间断' }
+];
 
-export const conceptRelations = [
-  [focusConceptId, 'sided-limits', 'checked-from-both-sides'],
-  [focusConceptId, 'equivalent-nearby-expressions', 'computed-in-neighborhood'],
-  [focusConceptId, 'continuity', 'compared-for-continuity'],
-  ['continuity', 'removable-discontinuity', 'extended-at-a-point']
+const relations = [
+  { from: focusConceptId, to: 'sided-limits', kind: 'checked-from-both-sides' },
+  { from: focusConceptId, to: 'equivalent-nearby-expressions', kind: 'computed-in-neighborhood' },
+  { from: focusConceptId, to: 'continuity', kind: 'compared-for-continuity' },
+  { from: 'continuity', to: 'removable-discontinuity', kind: 'extended-at-a-point' }
 ];
 
 function passage({ key, conceptId, level, terms, text, source, section }) {
   return {
     id: `${courseVersion}/${key}`,
-    conceptId, level, terms, text,
-    citation: { ...source, id: `${courseVersion}/${key}`, courseVersion, section }
+    courseVersion, conceptId, level, terms, text, sourceId: source.id, section,
+    publicationStatus: 'published', reviewStatus: 'pending'
   };
 }
 
-export const passages = [
+const passages = [
   passage({
     key: 'compare-observations', conceptId: focusConceptId, level: 1,
     terms: ['观察依据', '自我解释', '怎样观察', '从哪里看', '点上还是附近'],
@@ -100,3 +103,8 @@ export const passages = [
     source: continuity, section: '间断点与连续延拓'
   })
 ];
+
+export const coursePack = {
+  courseVersion, focusConceptId, publicationStatus: 'published', concepts, relations,
+  sources: [limits, limitLaws, continuity], passages
+};

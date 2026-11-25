@@ -128,7 +128,7 @@ test('受保护课堂要求凭证，保留课堂入口并关闭历史演示接�
 });
 
 test('教师按班级发布与查询，同一学生的跨班级记录独立', async t => {
-  const { request } = await startProtected(t);
+  const { request, base } = await startProtected(t);
   await publish(request, teacher, secondClass, 403);
   await publish(request, student, firstClass, 403);
   await request('/teacher', { subject: student, status: 403 });
@@ -148,6 +148,18 @@ test('教师按班级发布与查询，同一学生的跨班级记录独立', as
   const secondSummary = (await request('/teacher', { subject: otherTeacher, classId: secondClass })).data;
   assert.deepEqual(firstSummary.sessions.map(item => item.id), [first.id]);
   assert.deepEqual(secondSummary.sessions.map(item => item.id), [second.id]);
+  await request('/teacher/export', { subject: student, status: 403 });
+  await request('/teacher/export', { subject: teacher, classId: secondClass, status: 403 });
+  const exported = await fetch(`${base}/api/classroom/teacher/export?class=${firstClass}`, {
+    headers: { Authorization: `Bearer ${credential(teacher)}` }
+  });
+  assert.equal(exported.status, 200);
+  assert.equal(exported.headers.get('cache-control'), 'no-store');
+  const csv = await exported.text();
+  assert.ok(csv.includes(first.id));
+  assert.ok(!csv.includes(second.id) && !csv.includes(student));
+  const auditEntries = (await request('/audit', { subject: auditor })).data;
+  assert.ok(auditEntries.some(record => record.action === 'teacher.export' && record.outcome === 'success'));
   await request(`/sessions/${first.id}`, { subject: student, classId: secondClass, status: 404 });
 });
 

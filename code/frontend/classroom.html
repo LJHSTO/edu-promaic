@@ -146,7 +146,10 @@
       <section class="overview" aria-labelledby="overviewTitle">
         <div class="section-heading">
           <h2 id="overviewTitle">预习概况</h2>
-          <button class="secondary" id="refreshTeacher" type="button">刷新数据</button>
+          <div class="actions">
+            <button class="secondary" id="refreshTeacher" type="button">刷新数据</button>
+            <a class="button secondary" id="exportTeacher" aria-label="下载预习记录 CSV" download>下载 CSV</a>
+          </div>
         </div>
         <dl class="metrics">
           <div><dt>已开始</dt><dd data-metric="sessions">—</dd></div>
@@ -156,7 +159,7 @@
           <div><dt>验证首次通过</dt><dd data-metric="firstPass">—</dd></div>
           <div><dt>预习完成</dt><dd data-metric="completed">—</dd></div>
         </dl>
-        <p class="muted metrics-note">以上按匿名预习记录计数。</p>
+        <p class="muted metrics-note" id="verificationMetrics" role="status"></p>
       </section>
 
       <div class="teacher-grid">

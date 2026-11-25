@@ -222,16 +222,49 @@ function teacherSession({ id, revision, phase, result, events }) {
   return { id, revision, phase, result, timeline: events };
 }
 
+function hasPointValueError({ events }, phase) {
+  return events.some(event => event.phase === phase && event.misconception === pointValueMisconception);
+}
+
 function summarize(sessions) {
   const count = predicate => sessions.filter(predicate).length;
+  const verificationStarted = count(session => session.result.verificationAttempts > 0);
+  const firstPass = count(session => session.result.firstPass);
+  const completed = count(session => session.result.completed);
   return {
     sessions: sessions.length,
     practiceCompleted: count(session => session.phase !== 'practice'),
-    verificationStarted: count(session => session.result.verificationAttempts > 0),
-    firstPass: count(session => session.result.firstPass),
-    completed: count(session => session.result.completed),
-    usedHint: count(session => session.result.usedHint)
+    verificationStarted,
+    firstPass,
+    completed,
+    retryPass: completed - firstPass,
+    notSubmitted: sessions.length - verificationStarted,
+    usedHint: count(session => session.result.usedHint),
+    pointValuePractice: count(session => hasPointValueError(session, 'practice')),
+    pointValueVerification: count(session => hasPointValueError(session, 'verification'))
   };
+}
+
+function verificationStatus({ firstPass, completed, verificationAttempts }) {
+  if (firstPass) return 'first_pass';
+  if (completed) return 'retry_pass';
+  return verificationAttempts > 0 ? 'attempted_not_passed' : 'not_submitted';
+}
+
+function resultsCsv(sessions) {
+  const header = 'session_id,practice_attempts,hint_used,verification_attempts,verification_status';
+  const rows = sessions.map(({ id, result }) => [
+    /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(id) ? id : '',
+    Number.isSafeInteger(result.practiceAttempts) ? result.practiceAttempts : 0,
+    result.usedHint === true,
+    Number.isSafeInteger(result.verificationAttempts) ? result.verificationAttempts : 0,
+    verificationStatus(result)
+  ].join(','));
+  return `\uFEFF${[header, ...rows].join('\r\n')}\r\n`;
+}
+
+function teacherView({ published, sessions }) {
+  return structuredClone({ published, lesson, summary: summarize(sessions), sessions: sessions.slice(-20).map(teacherSession) });
 }
 
 export function createClassroom({ filePath, protection, engine = new ActiveDecisionEngine(), agent = createLearningAgent({
@@ -292,9 +325,7 @@ export function createClassroom({ filePath, protection, engine = new ActiveDecis
       commit({ ...classroom, sessions });
       return projectSession(updated);
     },
-    teacherOverview() {
-      const sessions = classroom.sessions.map(teacherSession);
-      return structuredClone({ ...overview(), summary: summarize(sessions), sessions: sessions.slice(-20) });
-    }
+    teacherOverview: () => teacherView(classroom),
+    teacherExport: () => resultsCsv(classroom.sessions)
   };
 }

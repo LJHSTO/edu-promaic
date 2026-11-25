@@ -167,6 +167,7 @@ test('模型适配器拒绝失败、截断和超出字节上限的供应响应',
   const responses = [
     [new Response('暂不可用', { status: 503 }), /模型暂时不可用/],
     [Response.json({ choices: [{ finish_reason: 'length' }] }), /未返回完整/],
+    [Response.json({ choices: [{ finish_reason: 'stop', message: { content: '  ' } }] }), SyntaxError],
     [Response.json({ choices: [{ finish_reason: 'stop', message: { content: '{}' } }] }), /选择格式无效/],
     [new Response(' '.repeat(33 * 1024)), /响应过长/]
   ];
@@ -174,4 +175,21 @@ test('模型适配器拒绝失败、截断和超出字节上限的供应响应',
     const planner = createModelPlanner({ apiKey: 'fixture-value', model: 'deepseek-flash', fetcher: async () => response });
     await assert.rejects(planner({ level: 3, passages: [] }), message);
   }
+});
+
+test('模型请求到期确实取消，工作流回到确定性选材', async () => {
+  let reason;
+  const fetcher = (url, { signal }) => new Promise((resolve, reject) => {
+    const watchdog = setTimeout(() => reject(new Error('超时信号未发出')), 1000);
+    signal.addEventListener('abort', () => {
+      clearTimeout(watchdog);
+      reason = signal.reason;
+      reject(reason);
+    }, { once: true });
+  });
+  const planner = createModelPlanner({ apiKey: 'fixture-value', model: 'deepseek-flash', fetcher, timeout: 10 });
+  const result = await build({ planner })(input({ requestedHelp: true, currentLevel: 2 }));
+  assert.equal(reason?.name, 'TimeoutError');
+  assert.equal(result.trace.outcome, 'grounded');
+  assert.ok(result.trace.steps.includes('rank-locally'));
 });

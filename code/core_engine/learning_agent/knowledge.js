@@ -1,4 +1,5 @@
-import { conceptLabels, conceptRelations, courseVersion, passages } from './knowledge-data.js';
+import { parseCoursePack } from './course-pack-schema.js';
+import { coursePack } from './knowledge-data.js';
 
 export { courseVersion, focusConceptId } from './knowledge-data.js';
 
@@ -14,9 +15,18 @@ function matchesTerm(query, term) {
   return ` ${query} `.includes(` ${term} `);
 }
 
-const searchIndex = passages.map(passage => ({
-  passage, terms: passage.terms.map(normalize)
-}));
+function indexPassages(pack) {
+  if (pack.publicationStatus !== 'published') return [];
+  const sources = new Map(pack.sources.map(source => [source.id, source]));
+  return pack.passages.filter(passage => passage.publicationStatus === 'published').map(passage => {
+    const { label, url } = sources.get(passage.sourceId);
+    const { id, courseVersion, section } = passage;
+    return {
+      passage: { ...passage, citation: { id, courseVersion, section, label, url } },
+      terms: passage.terms.map(normalize)
+    };
+  });
+}
 
 function rankMatch(query, terms) {
   let score = 0;
@@ -30,21 +40,22 @@ function publicPassage({ id, conceptId, text, level, citation }) {
   return { id, conceptId, text, level, citation: { ...citation } };
 }
 
-function isCourseConcept(conceptId, version) {
-  return version === courseVersion && conceptLabels.has(conceptId);
+function isCourseConcept(knowledge, conceptId, version) {
+  return knowledge.publicationStatus === 'published'
+    && version === knowledge.courseVersion && knowledge.conceptLabels.has(conceptId);
 }
 
-export function expandKnowledge({ conceptId, courseVersion: version } = {}) {
-  if (!isCourseConcept(conceptId, version)) return [];
-  return conceptRelations.filter(([from]) => from === conceptId).map(([, neighbor, relation]) => ({
-    conceptId: neighbor, label: conceptLabels.get(neighbor), relation
+function expandCourse(knowledge, { conceptId, courseVersion: version } = {}) {
+  if (!isCourseConcept(knowledge, conceptId, version)) return [];
+  return knowledge.relations.filter(({ from }) => from === conceptId).map(({ to, kind }) => ({
+    conceptId: to, label: knowledge.conceptLabels.get(to), relation: kind
   }));
 }
 
-export function lookupKnowledge({ id, courseVersion: version } = {}) {
-  if (version !== courseVersion) return null;
-  const found = passages.find(passage => passage.id === id);
-  return found ? publicPassage(found) : null;
+function lookupCourse(knowledge, { id, courseVersion: version } = {}) {
+  if (version !== knowledge.courseVersion) return null;
+  const match = knowledge.searchIndex.find(({ passage }) => passage.id === id);
+  return match ? publicPassage(match.passage) : null;
 }
 
 function normalizedQuery(query) {
@@ -57,12 +68,12 @@ function validBounds(maxLevel, limit) {
     Number.isInteger(limit) && limit >= 1;
 }
 
-export function retrieveKnowledge({ query, conceptId, courseVersion: version, limit = 3, maxLevel = 5 } = {}) {
+function retrieveCourse(knowledge, { query, conceptId, courseVersion: version, limit = 3, maxLevel = 5 } = {}) {
   const normalized = normalizedQuery(query);
-  if (!isCourseConcept(conceptId, version) || !normalized || !validBounds(maxLevel, limit)) return [];
-  const neighbors = expandKnowledge({ conceptId, courseVersion: version });
+  if (!isCourseConcept(knowledge, conceptId, version) || !normalized || !validBounds(maxLevel, limit)) return [];
+  const neighbors = expandCourse(knowledge, { conceptId, courseVersion: version });
   const scope = new Set([conceptId, ...neighbors.map(neighbor => neighbor.conceptId)]);
-  const matches = searchIndex.filter(({ passage }) => scope.has(passage.conceptId) && passage.level <= maxLevel)
+  const matches = knowledge.searchIndex.filter(({ passage }) => scope.has(passage.conceptId) && passage.level <= maxLevel)
     .map(({ passage, terms }) => ({ passage, score: rankMatch(normalized, terms) }))
     .filter(({ score }) => score > 0);
 
@@ -70,3 +81,18 @@ export function retrieveKnowledge({ query, conceptId, courseVersion: version, li
   return matches.sort((a, b) => b.score - a.score || b.passage.level - a.passage.level)
     .slice(0, Math.min(limit, resultLimit)).map(({ passage }) => publicPassage(passage));
 }
+
+export function createCourseKnowledge(value) {
+  const pack = parseCoursePack(value);
+  const knowledge = {
+    courseVersion: pack.courseVersion, publicationStatus: pack.publicationStatus, relations: pack.relations,
+    conceptLabels: new Map(pack.concepts.map(({ id, label }) => [id, label])), searchIndex: indexPassages(pack)
+  };
+  return {
+    expandKnowledge: query => expandCourse(knowledge, query),
+    lookupKnowledge: query => lookupCourse(knowledge, query),
+    retrieveKnowledge: query => retrieveCourse(knowledge, query)
+  };
+}
+
+export const { expandKnowledge, lookupKnowledge, retrieveKnowledge } = createCourseKnowledge(coursePack);

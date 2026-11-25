@@ -171,7 +171,8 @@ test('学生错答、线索、独立验证与教师实录走同一条链路', as
   assert.equal(round.result.verificationAttempts, 2);
   const teacher = await classroomRequest(base, '/teacher');
   assert.deepEqual(teacher.summary, {
-    sessions: 1, practiceCompleted: 1, verificationStarted: 1, firstPass: 0, completed: 1, usedHint: 1
+    sessions: 1, practiceCompleted: 1, verificationStarted: 1, firstPass: 0, completed: 1,
+    retryPass: 1, notSubmitted: 0, usedHint: 1, pointValuePractice: 1, pointValueVerification: 1
   });
   assert.equal(teacher.sessions[0].id, round.id);
   assert.equal(teacher.sessions[0].timeline.length, 6);
@@ -189,11 +190,36 @@ test('关闭线索期间继续作答，教师区分首次通过与未提交验�
     assert.equal(round.hint, null);
   }
   round = await classroomEvent(base, round, 'mute-correct', { action: 'answer', choice: 'b' });
-  assert.equal((await classroomRequest(base, '/teacher')).summary.verificationStarted, 0);
+  const waiting = (await classroomRequest(base, '/teacher')).summary;
+  assert.equal(waiting.verificationStarted, 0);
+  assert.equal(waiting.notSubmitted, 1);
   round = await classroomEvent(base, round, 'first-pass', { action: 'answer', choice: 'c' });
   assert.equal(round.result.firstPass, true);
   assert.equal(round.result.usedHint, false);
   assert.equal((await classroomRequest(base, '/teacher')).summary.firstPass, 1);
+});
+
+test('课堂导出区分首次通过、重试通过、已提交未通过和未提交', async t => {
+  const base = await startServer(t);
+  await publishClassroom(base);
+  for (const [index, answers] of [['c'], ['a', 'c'], ['a'], []].entries()) {
+    const session = await startClassroom(base);
+    let round = await classroomEvent(base, session, `practice-${index}`, { action: 'answer', choice: 'b' });
+    for (const [step, choice] of answers.entries()) {
+      round = await classroomEvent(base, round, `verify-${step}`, { action: 'answer', choice });
+    }
+  }
+  const { summary } = await classroomRequest(base, '/teacher');
+  assert.deepEqual([summary.verificationStarted, summary.firstPass, summary.retryPass, summary.notSubmitted], [3, 1, 1, 1]);
+  assert.equal(summary.pointValuePractice, 0);
+  assert.equal(summary.pointValueVerification, 2);
+  const response = await fetch(`${base}/api/classroom/teacher/export`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /^text\/csv/);
+  assert.match(response.headers.get('content-disposition'), /classroom-results\.csv/);
+  const [header, ...rows] = (await response.text()).trim().split('\r\n');
+  assert.equal(header, 'session_id,practice_attempts,hint_used,verification_attempts,verification_status');
+  assert.deepEqual(rows.map(row => row.split(',').at(-1)), ['first_pass', 'retry_pass', 'attempted_not_passed', 'not_submitted']);
 });
 
 test('旧版本和改写事件 ID 会冲突，重传相同事件不重复计数', async t => {
