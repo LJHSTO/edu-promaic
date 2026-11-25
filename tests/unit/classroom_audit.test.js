@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -6,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
-  classroomAuditDomain, createAuditLog, readAuditSnapshot, verifyAuditSnapshot
+  classroomAuditDomain, createAuditLog, maximumAuditBytes, prepareAuditRollover, readAuditSnapshot, verifyAuditSnapshot
 } from '../../code/backend/classroom-audit.js';
 
 const key = Buffer.alloc(32, 19);
@@ -115,4 +116,137 @@ test('命令行用外部检查点验证归档，并在源历史回退时停止�
   assert.equal(rolledBack.status, 1);
   assert.match(rolledBack.stderr, /早于/);
   assert.equal(existsSync(rejected), false);
+});
+
+function rollover(directory, filePath, number, previous) {
+  const archive = join(directory, `archive-${number}.json`);
+  const checkpoint = join(directory, `checkpoint-${number}.json`);
+  const next = join(directory, `next-${number}.json`);
+  const environment = keyEnvironment();
+  const options = previous ? ['--checkpoint', previous] : [];
+  const exported = runCli(environment, 'export', '--file', filePath, '--out', archive, ...options);
+  assert.equal(exported.status, 0, exported.stderr);
+  writeFileSync(checkpoint, exported.stdout);
+  const arguments_ = ['rollover', '--file', filePath, '--archive', archive, '--checkpoint', checkpoint, '--out', next];
+  const result = runCli(environment, ...arguments_);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, exported.stdout);
+  return { next, archive, checkpoint, arguments_ };
+}
+
+test('连续两次分段续写保持序号和链头，旧检查点通过上一份归档衔接', t => {
+  const { directory, filePath, log } = auditFixture(t);
+  log.append(entry('old-1'));
+  const firstRecordCheckpoint = readAuditSnapshot({ filePath, key }).checkpoint;
+  log.append(entry('old-2'));
+  const first = rollover(directory, filePath, 1);
+  const empty = readAuditSnapshot({ filePath: first.next, key });
+  const firstHead = JSON.parse(readFileSync(first.checkpoint, 'utf8'));
+  assert.deepEqual(empty.checkpoint, firstHead);
+  assert.deepEqual(empty.state.records, []);
+  assert.equal(empty.state.version, 2);
+  assert.equal(readAuditSnapshot({ filePath: filePath, key }).state.version, 1);
+  assert.deepEqual(readAuditSnapshot({ filePath: first.archive, key, checkpoint: firstRecordCheckpoint }).checkpoint, firstHead);
+  assert.throws(() => readAuditSnapshot({ filePath: first.next, key, checkpoint: firstRecordCheckpoint }), /上一份归档/);
+
+  createAuditLog({ filePath: first.next, key, domain }).append(entry('new-3'));
+  const middle = readAuditSnapshot({ filePath: first.next, key, checkpoint: firstHead });
+  assert.equal(middle.state.records[0].previous, firstHead.head);
+  assert.equal(middle.state.records[0].sequence, 3);
+  const second = rollover(directory, first.next, 2, first.checkpoint);
+  assert.deepEqual(readAuditSnapshot({ filePath: second.archive, key, checkpoint: firstHead }).checkpoint, middle.checkpoint);
+  const reopened = createAuditLog({ filePath: second.next, key, domain });
+  reopened.append(entry('new-4'));
+  const latest = readAuditSnapshot({ filePath: second.next, key, checkpoint: middle.checkpoint });
+  assert.equal(latest.state.records[0].previous, middle.checkpoint.head);
+  assert.equal(latest.checkpoint.sequence, 4);
+  assert.deepEqual(reopened.tail({ classId: 'alpha' }).map(item => item.requestId), ['new-4']);
+  assert.throws(() => readAuditSnapshot({ filePath: second.archive, key, checkpoint: latest.checkpoint }), /早于/);
+  const collision = runCli(keyEnvironment(), ...second.arguments_);
+  assert.equal(collision.status, 1);
+  assert.match(collision.stderr, /已存在/);
+  assert.deepEqual(readAuditSnapshot({ filePath: second.next, key }).checkpoint, latest.checkpoint);
+});
+
+test('分段序号相同的历史分支无法通过检查点，普通检查点不能充当分段签名', t => {
+  const { directory, filePath, log } = auditFixture(t);
+  log.append(entry('old-1'));
+  const first = rollover(directory, filePath, 1);
+  const empty = readAuditSnapshot({ filePath: first.next, key });
+  const fork = join(directory, 'fork.json');
+  writeFileSync(fork, JSON.stringify(empty.state));
+  createAuditLog({ filePath: first.next, key, domain }).append(entry('selected-2'));
+  createAuditLog({ filePath: fork, key, domain }).append(entry('other-2'));
+  const active = readAuditSnapshot({ filePath: first.next, key });
+  assert.throws(() => readAuditSnapshot({ filePath: fork, key, checkpoint: active.checkpoint }), /检查点不一致/);
+
+  const { state } = empty;
+  const unsignedStart = { ...state, start: { ...state.start, tag: empty.checkpoint.tag } };
+  assert.throws(() => verifyAuditSnapshot({ text: JSON.stringify(unsignedStart), key }), /分段起点签名/);
+});
+
+test('轮换要求当前末尾、独立归档和完整原段', t => {
+  const { directory, filePath, log } = auditFixture(t);
+  log.append(entry('old-1'));
+  const prior = readAuditSnapshot({ filePath, key }).checkpoint;
+  log.append(entry('old-2'));
+  const text = readFileSync(filePath, 'utf8');
+  const { checkpoint } = readAuditSnapshot({ filePath, key });
+  assert.throws(() => prepareAuditRollover({ text, archiveText: text, key, checkpoint: prior }), /分段末尾/);
+  const unrelated = join(directory, 'unrelated.json');
+  createAuditLog({ filePath: unrelated, key, domain }).append(entry('other-1'));
+  assert.throws(() => prepareAuditRollover({ text, archiveText: readFileSync(unrelated, 'utf8'), key, checkpoint }), /完全一致/);
+  const empty = prepareAuditRollover({ text, archiveText: text, key, checkpoint });
+  const emptyText = JSON.stringify(empty.state);
+  assert.throws(() => prepareAuditRollover({ text: emptyText, archiveText: emptyText, key, checkpoint }), /尚无记录/);
+  const checkpointFile = join(directory, 'checkpoint.json');
+  writeFileSync(checkpointFile, JSON.stringify(checkpoint));
+  const output = join(directory, 'candidate.json');
+  const failed = runCli(keyEnvironment(), 'rollover', '--file', filePath, '--archive', filePath,
+    '--checkpoint', checkpointFile, '--out', output);
+  assert.equal(failed.status, 1);
+  assert.match(failed.stderr, /各自保管/);
+  assert.equal(existsSync(output), false);
+  assert.equal(readFileSync(filePath, 'utf8'), text);
+});
+
+function historicSnapshotAtLimit() {
+  // 生成旧格式样本，避免逐条写入导致测试反复重写大文件。
+  const prefix = JSON.stringify(['edu-promaic/classroom-audit', 1, domain]);
+  const digest = data => createHmac('sha256', key).update(prefix).update(JSON.stringify(data)).digest('base64url');
+  const state = { version: 1, head: digest(['start']), records: [] };
+  let bytes = Buffer.byteLength(JSON.stringify(state));
+  while (bytes < maximumAuditBytes) {
+    const sequence = state.records.length + 1;
+    const at = '2026-11-25T00:00:00.000Z';
+    const previous = state.head;
+    const metadata = entry(`sample-${sequence}`, { actor: null });
+    const { action, outcome, requestId, classId, actor } = metadata;
+    const tag = digest([sequence, at, previous, action, outcome, requestId, classId, actor]);
+    const record = { sequence, at, previous, ...metadata, tag };
+    const length = Buffer.byteLength(JSON.stringify(record)) + Number(sequence > 1);
+    if (bytes + length > maximumAuditBytes) break;
+    state.records.push(record);
+    state.head = tag;
+    bytes += length;
+  }
+  return JSON.stringify(state);
+}
+
+test('接近容量上限的历史日志可独立归档并在新段继续写入', t => {
+  const { directory, filePath } = auditFixture(t);
+  const text = historicSnapshotAtLimit();
+  assert.ok(Buffer.byteLength(text) <= maximumAuditBytes);
+  writeFileSync(filePath, text);
+  const before = readAuditSnapshot({ filePath, key });
+  const update = entry('x'.repeat(120), { actor: 'y'.repeat(120) });
+  const open = path => createAuditLog({ filePath: path, key, domain });
+  assert.throws(() => open(filePath).append(update), /容量上限/);
+  assert.equal(readFileSync(filePath, 'utf8'), text);
+  const { next, archive } = rollover(directory, filePath, 1);
+  assert.equal(readFileSync(archive, 'utf8'), text);
+  open(next).append(update);
+  const result = readAuditSnapshot({ filePath: next, key, checkpoint: before.checkpoint });
+  assert.equal(result.checkpoint.sequence, before.checkpoint.sequence + 1);
+  assert.ok(Buffer.byteLength(readFileSync(next)) < 2048);
 });

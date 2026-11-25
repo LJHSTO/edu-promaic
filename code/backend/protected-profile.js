@@ -1,10 +1,10 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createProtectedAccess } from './access.js';
 import { createClassroom } from './classroom.js';
-import { createStoreProtection, isSecurityIdentifier, parseClassroomKeys } from './classroom-protection.js';
-import { createAuditLog } from './classroom-audit.js';
+import { createStoreProtection, isSecurityIdentifier, parseClassroomKeys, readBoundedFile } from './classroom-protection.js';
+import { classroomAuditDomain, createAuditLog } from './classroom-audit.js';
 
 function configPath(directory, value) {
   if (typeof value !== 'string' || value.length === 0) throw new Error('受保护课堂缺少必要的文件或目录路径。');
@@ -38,6 +38,36 @@ export function createProtectedProfile({ access, classrooms, defaultClass, audit
   };
 }
 
+function commitWithRetentionAudit(audit, classId, persist) {
+  const receipt = { action: 'retention.prune', requestId: randomUUID(), classId };
+  audit.append({ ...receipt, outcome: 'allowed' });
+  try {
+    persist();
+  } catch (error) {
+    try {
+      audit.append({ ...receipt, outcome: 'error' });
+    } catch (auditError) {
+      throw new AggregateError([error, auditError], '课堂清理及审计写入失败。');
+    }
+    throw error;
+  }
+  audit.append({ ...receipt, outcome: 'success' });
+}
+
+function sweepClassrooms(classrooms) {
+  let removed = 0;
+  const errors = [];
+  for (const room of classrooms.values()) {
+    try {
+      removed += room.sweepExpiredSessions();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw new AggregateError(errors, '部分课堂未能完成会话清理。');
+  return removed;
+}
+
 export function loadProtectedProfile(configFile, { engine, agent, storeKeyText, auditKeyText }) {
   if (!configFile) throw new Error('请设置 CLASSROOM_SECURITY_CONFIG。');
   const filename = resolve(configFile);
@@ -49,12 +79,19 @@ export function loadProtectedProfile(configFile, { engine, agent, storeKeyText, 
   const dataDirectory = configPath(directory, config.dataDirectory);
   const classIds = new Set(config.memberships.map(member => member.classId));
   if ([...classIds].some(classId => !isSecurityIdentifier(classId))) throw new Error('班级编号须以字母或数字开头。');
+  const checkpoint = config.auditCheckpointFile === undefined ? undefined
+    : JSON.parse(readBoundedFile(configPath(directory, config.auditCheckpointFile), 4096));
+  const audit = createAuditLog({
+    filePath: resolve(dataDirectory, 'access-audit.json'), key: auditKey, domain: classroomAuditDomain, checkpoint
+  });
   const classrooms = new Map([...classIds].map(classId => [classId, createClassroom({
     filePath: resolve(dataDirectory, `${classId}.sealed.json`),
     protection: createStoreProtection({ key: storeKey, domain: `class:${classId}` }),
-    engine, agent
+    engine, agent, sessionRetentionDays: config.sessionRetentionDays,
+    commitPruning: persist => commitWithRetentionAudit(audit, classId, persist)
   })]));
-  const audit = createAuditLog({ filePath: resolve(dataDirectory, 'access-audit.json'), key: auditKey, domain: 'edu-access' });
   const tls = { key: read('tlsKeyFile'), cert: read('tlsCertFile'), minVersion: 'TLSv1.2' };
-  return createProtectedProfile({ access, classrooms, defaultClass: config.defaultClass, audit, auditKey, tls });
+  const profile = createProtectedProfile({ access, classrooms, defaultClass: config.defaultClass, audit, auditKey, tls });
+  if (config.sessionRetentionDays !== undefined) profile.sweepExpiredSessions = () => sweepClassrooms(classrooms);
+  return profile;
 }

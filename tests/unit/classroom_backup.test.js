@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { classroomAuditDomain, createAuditLog } from '../../code/backend/classroom-audit.js';
+import { classroomAuditDomain, createAuditLog, readAuditSnapshot } from '../../code/backend/classroom-audit.js';
 import { backupClassrooms, restoreClassrooms, verifyClassroomBackup } from '../../code/backend/classroom-backup.js';
 import { createStoreProtection } from '../../code/backend/classroom-protection.js';
 import { createClassroom } from '../../code/backend/classroom.js';
@@ -70,6 +70,23 @@ test('备份和恢复只使用新目录，源目录额外文件会阻止复制',
   assert.equal(await readFile(join(target, 'marker'), 'utf8'), '保留');
   await writeFile(join(source, 'test-not-a-snapshot.txt'), '额外文件');
   assert.throws(() => backupClassrooms(source, join(directory, 'other'), keys), /未识别/);
+});
+
+test('恢复历史会话时保留符合独立检查点的当前审计', async t => {
+  const { source, backup, target, keys, session, protection } = await createFixture(t);
+  backupClassrooms(source, backup, keys);
+  const auditFile = join(source, 'access-audit.json');
+  const audit = createAuditLog({ filePath: auditFile, key: keys.auditKey, domain: classroomAuditDomain });
+  audit.append({ action: 'session.create', outcome: 'success', requestId: 'new-activity', classId: 'calculus-a' });
+  const { checkpoint } = readAuditSnapshot({ filePath: auditFile, key: keys.auditKey });
+  assert.throws(() => restoreClassrooms(backup, target, keys, { auditFile }), /独立检查点/);
+  assert.throws(() => restoreClassrooms(backup, target, keys, {
+    auditFile: join(backup, 'access-audit.json'), checkpoint
+  }), /早于已保存的检查点/);
+  assert.deepEqual(restoreClassrooms(backup, target, keys, { auditFile, checkpoint }), { classrooms: 1, files: 2 });
+  assert.equal(readAuditSnapshot({ filePath: join(target, 'access-audit.json'), key: keys.auditKey }).checkpoint.sequence, 2);
+  const room = createClassroom({ filePath: join(target, 'calculus-a.sealed.json'), protection });
+  assert.deepEqual(room.getSession(session.id, 'sample-account'), session);
 });
 
 test('备份命令支持凭证文件，拒绝同一凭证的两种配置', async t => {

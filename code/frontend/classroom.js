@@ -418,11 +418,13 @@ function makeAgentReceipt(trace) {
 function makeTimelineEntry(event) {
   const row = document.createElement('li');
   const time = document.createElement('time');
-  const date = new Date(event.at);
+  const date = new Date(typeof event.at === 'string' ? event.at : NaN);
   let label = timelineLabel(event);
   if (event.hintLevel) label += ` · 线索 L${event.hintLevel}`;
-  time.dateTime = date.toISOString();
-  time.textContent = dateFormat.format(date);
+  if (Number.isFinite(date.getTime())) {
+    time.dateTime = date.toISOString();
+    time.textContent = dateFormat.format(date);
+  } else time.textContent = '时间未知';
   row.append(label, time);
   if (event.agent) row.append(makeAgentReceipt(event.agent));
   return row;

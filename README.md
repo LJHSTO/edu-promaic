@@ -64,7 +64,7 @@ npm run quality:duplicates
 npm audit --audit-level=high
 ```
 
-`npm test` 运行全部单元和接口集成测试。也可用 `npm run test:unit`、`npm run test:integration` 分别运行。GitHub Actions 在推送和 Pull Request 时执行上述检查。代码质量作业见[扫描与重构报告](docs/software/code_quality.md)和[代码评审记录](docs/software/code_review.md)。
+`npm test` 运行单元和接口集成测试。`npm run test:protected` 通过 OpenSSL 生成临时证书，验证真实 HTTPS 启动、停机与审计续写。GitHub Actions 在推送和 Pull Request 时运行检查，Linux 任务包含 HTTPS 系统测试。 [扫描与重构报告](docs/software/code_quality.md) · [代码评审记录](docs/software/code_review.md)
 
 ## 接口示例
 

@@ -11,6 +11,7 @@ const identifierPattern = /^[a-zA-Z0-9_-]{1,100}$/;
 const pointValueMisconception = 'limit_equals_function_value';
 const maxSessions = 500;
 const maxEvents = 120;
+const millisecondsPerDay = 86_400_000;
 
 export class ClassroomError extends Error {
   constructor(status, message) {
@@ -58,11 +59,12 @@ function saveClassroom(filePath, classroom, protection) {
   replacePrivateFile(filePath, encoded);
 }
 
-function newSession(startKey, owner) {
+function newSession(startKey, owner, lastActivityAt) {
   return {
     id: randomUUID(),
     startKey,
     owner,
+    lastActivityAt,
     revision: 0,
     phase: 'practice',
     helpEnabled: true,
@@ -198,10 +200,10 @@ function toggleHelp(session) {
   feedback(session, 'info', session.helpEnabled ? '已恢复本题提示。' : '已关闭本题提示。');
 }
 
-async function applyEvent(session, input, agent) {
+async function applyEvent(session, input, agent, now) {
   const { phase } = session;
   const event = {
-    ...input, phase, correct: null, misconception: null, hintLevel: null, at: new Date().toISOString()
+    ...input, phase, correct: null, misconception: null, hintLevel: null, at: new Date(now).toISOString()
   };
   if (event.action === 'answer') {
     event.correct = event.choice === questions[phase].answer;
@@ -267,9 +269,48 @@ function teacherView({ published, sessions }) {
   return structuredClone({ published, lesson, summary: summarize(sessions), sessions: sessions.slice(-20).map(teacherSession) });
 }
 
-export function createClassroom({ filePath, protection, engine = new ActiveDecisionEngine(), agent = createLearningAgent({
-  engine, approvedFallback: hintAt
-}) } = {}) {
+function retentionDuration(days) {
+  if (days === undefined) return;
+  const duration = days * millisecondsPerDay;
+  if (!Number.isSafeInteger(days) || days < 1 || !Number.isSafeInteger(duration)) {
+    throw new TypeError('sessionRetentionDays 须为有效的正整数天数。');
+  }
+  return duration;
+}
+
+function validActivityTime(value) {
+  return Number.isSafeInteger(value) && value >= 0 && value <= 8.64e15;
+}
+
+function activityTime({ lastActivityAt, events }, now) {
+  if (validActivityTime(lastActivityAt)) return lastActivityAt;
+  let latest;
+  for (const { at } of events) {
+    if (typeof at !== 'string') return now;
+    const time = Date.parse(at);
+    if (!validActivityTime(time) || new Date(time).toISOString() !== at) return now;
+    latest = Math.max(latest ?? time, time);
+  }
+  return latest ?? now;
+}
+
+function retainSessions(sessions, now, retention) {
+  const retained = [];
+  let updated = false;
+  for (const session of sessions) {
+    const lastActivityAt = activityTime(session, now);
+    if (lastActivityAt <= now - retention) continue;
+    if (session.lastActivityAt === lastActivityAt) retained.push(session);
+    else {
+      retained.push({ ...session, lastActivityAt });
+      updated = true;
+    }
+  }
+  return { retained, updated, removed: sessions.length - retained.length };
+}
+
+function createSessionStore({ filePath, protection, sessionRetentionDays, now, commitPruning }) {
+  const retention = retentionDuration(sessionRetentionDays);
   let classroom = loadClassroom(filePath, protection);
 
   function commit(next) {
@@ -277,55 +318,83 @@ export function createClassroom({ filePath, protection, engine = new ActiveDecis
     classroom = next;
   }
 
-  function overview() {
-    return { published: classroom.published, lesson };
+  function sweepExpiredSessions(asOf = now()) {
+    if (retention === undefined) return 0;
+    const { retained, updated, removed } = retainSessions(classroom.sessions, asOf, retention);
+    const persist = () => commit({ ...classroom, sessions: retained });
+    if (removed) commitPruning(persist);
+    else if (updated) persist();
+    return removed;
   }
 
-  function findSession(id, owner) {
-    const session = classroom.sessions.find(item => item.id === id && item.owner === owner);
-    if (!session) throw new ClassroomError(404, '未找到该课堂会话。');
-    return session;
+  function read(asOf) {
+    sweepExpiredSessions(asOf);
+    return classroom;
   }
+
+  return { read, commit, sweepExpiredSessions };
+}
+
+function findSession(classroom, id, owner) {
+  const session = classroom.sessions.find(item => item.id === id && item.owner === owner);
+  if (!session) throw new ClassroomError(404, '未找到该课堂会话。');
+  return session;
+}
+
+export function createClassroom({
+  filePath, protection, sessionRetentionDays, now = Date.now, commitPruning = persist => persist(),
+  engine = new ActiveDecisionEngine(), agent = createLearningAgent({ engine, approvedFallback: hintAt })
+} = {}) {
+  const store = createSessionStore({ filePath, protection, sessionRetentionDays, now, commitPruning });
+  const overview = () => ({ published: store.read().published, lesson });
 
   return {
     overview,
+    sweepExpiredSessions: () => store.sweepExpiredSessions(),
     publish() {
-      if (!classroom.published) commit({ ...classroom, published: true });
-      return overview();
+      const classroom = store.read();
+      if (!classroom.published) store.commit({ ...classroom, published: true });
+      return { published: true, lesson };
     },
     createSession(startKey, owner) {
       if (startKey !== undefined && !isIdentifier(startKey)) {
         throw new ClassroomError(400, '开始课堂编号须为 1 到 100 个字母、数字、横线或下划线。');
       }
+      const issuedAt = now();
+      const classroom = store.read(issuedAt);
       if (!classroom.published) throw new ClassroomError(409, '课堂任务尚未发布。');
       if (startKey !== undefined) {
         const existing = classroom.sessions.find(session => session.startKey === startKey && session.owner === owner);
         if (existing) return projectSession(existing);
       }
       if (classroom.sessions.length >= maxSessions) throw new ClassroomError(409, '课堂记录已达上限。');
-      const session = newSession(startKey, owner);
-      commit({ ...classroom, sessions: [...classroom.sessions, session] });
+      const session = newSession(startKey, owner, issuedAt);
+      store.commit({ ...classroom, sessions: [...classroom.sessions, session] });
       return projectSession(session);
     },
     getSession(id, owner) {
-      return projectSession(findSession(id, owner));
+      return projectSession(findSession(store.read(), id, owner));
     },
     async submit(id, input, owner) {
-      const session = findSession(id, owner);
+      const acceptedAt = now();
+      const session = findSession(store.read(acceptedAt), id, owner);
       const event = parseEvent(input);
       if (isDuplicate(session, event)) return projectSession(session);
       verifyEvent(session, event);
       checkEventCapacity(session);
       const updated = structuredClone(session);
-      await applyEvent(updated, event, agent);
-      const current = findSession(id, owner);
+      await applyEvent(updated, event, agent, acceptedAt);
+      const committedAt = now();
+      const classroom = store.read(committedAt);
+      const current = findSession(classroom, id, owner);
       if (isDuplicate(current, event)) return projectSession(current);
       verifyEvent(current, event);
+      updated.lastActivityAt = Math.max(activityTime(current, committedAt), committedAt);
       const sessions = classroom.sessions.map(item => item.id === id ? updated : item);
-      commit({ ...classroom, sessions });
+      store.commit({ ...classroom, sessions });
       return projectSession(updated);
     },
-    teacherOverview: () => teacherView(classroom),
-    teacherExport: () => resultsCsv(classroom.sessions)
+    teacherOverview: () => teacherView(store.read()),
+    teacherExport: () => resultsCsv(store.read().sessions)
   };
 }

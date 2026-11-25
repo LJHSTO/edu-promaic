@@ -34,7 +34,7 @@ sudo install -o root -g root -m 0644 deployment/linux/edu-promaic.service \
   /etc/systemd/system/edu-promaic.service
 ```
 
-1. 编辑 `/etc/edu-promaic/classroom.json`，填写实际签发方、受众、站点源、机构批准的鉴别等级和班级名册。`origin` 填浏览器访问的公开 HTTPS 源，如 `https://learn.example.edu`。 [配置示例](../../deployment/linux/classroom.example.json)
+1. 编辑 `/etc/edu-promaic/classroom.json`，填写实际签发方、受众、站点源、机构批准的鉴别等级和班级名册。`origin` 填浏览器访问的公开 HTTPS 源，如 `https://learn.example.edu`。根据批准的学习数据留存规则填写 `sessionRetentionDays`，示例为 30 天。 [配置示例](../../deployment/linux/classroom.example.json)
 2. 将机构 RSA 签发公钥安装为 `/etc/edu-promaic/identity-public.pem`，将后端证书链安装为 `/etc/edu-promaic/tls-chain.pem`。两者由 `root:edu-promaic` 持有，权限为 `0640`。请为后端证书设置网关使用的内部 DNS 名称。
 3. 通过机构密钥分发流程把独立的存储密钥、审计密钥和后端 TLS 私钥分别写入 `/etc/edu-promaic/credentials/store-key`、`audit-key`、`tls-private.pem`。这些源文件由 `root:root` 持有，权限为 `0600`。存储密钥和审计密钥分别采用 32 字节的标准 Base64 表示。systemd 将凭据副本挂载为只读文件，用于服务启动。 [systemd 凭据说明](https://www.freedesktop.org/software/systemd/man/latest/systemd.exec.html#Credentials)
 
@@ -69,4 +69,4 @@ location / {
 - 未登录时访问 `/api/classroom` 应返回 `401`。使用验收账号核对同班教师发布、学生作答和审计员读取记录，再验证跨班级或跨角色访问返回 `403`。
 - 用 `systemd-analyze security edu-promaic.service` 核对进程账户、文件系统沙箱和网络设置，用 `journalctl -u edu-promaic.service` 查看启动与检查结果。服务启动检查与机构测评分别记录。 [安全验收矩阵](security.md#等保三级对照)
 
-升级时切换至审核过的发布目录并重启服务，随后重复健康、授权和作答验收。回滚程序时保留课堂数据目录，先核对快照格式与目标版本，再切回上一已验证的发布目录。密钥轮换和数据恢复按机构变更记录执行。
+升级时切换至审核过的发布目录并重启服务，随后重复健康、授权和作答验收。回滚程序时保留课堂数据目录，先核对快照格式与目标版本，再切回上一已验证的发布目录。机构按维护窗口执行审计轮转、启动检查点更新和数据恢复。 [运维步骤](security.md#审计归档与备份恢复)

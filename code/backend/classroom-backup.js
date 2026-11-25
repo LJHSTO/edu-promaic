@@ -83,13 +83,13 @@ function ensureNamesUnchanged(directory, bundle, files) {
   }
 }
 
-function copyFiles(source, destination, files, { bundle, manifest }) {
+function copyFiles(source, destination, files, { bundle, manifest, auditReplacement }) {
   mkdirSync(destination, { mode: 0o700 });
   try {
     for (const { name, sha256 } of files) {
       const text = readSnapshot(source, name);
       if (digest(text) !== sha256) throw new Error('操作期间源记录发生变化。');
-      replacePrivateFile(join(destination, name), text);
+      replacePrivateFile(join(destination, name), name === auditName ? auditReplacement ?? text : text);
     }
     ensureNamesUnchanged(source, bundle, files);
     if (manifest) replacePrivateFile(join(destination, manifestName), manifest);
@@ -123,8 +123,19 @@ export function verifyClassroomBackup(directory, keys) {
   return summary(verifiedFiles(directory, keys));
 }
 
-export function restoreClassrooms(source, destination, keys) {
+function readCurrentAudit({ auditFile, checkpoint }, key) {
+  if (auditFile === undefined && checkpoint === undefined) return undefined;
+  if (typeof auditFile !== 'string' || !auditFile || checkpoint === undefined) {
+    throw new Error('保留当前审计时须提供审计文件和独立检查点。');
+  }
+  const text = readBoundedFile(auditFile, maximumAuditBytes);
+  verifyAuditSnapshot({ text, key, checkpoint });
+  return text;
+}
+
+export function restoreClassrooms(source, destination, keys, audit = {}) {
   const files = verifiedFiles(source, keys);
-  copyFiles(source, destination, files, { bundle: true });
+  const auditReplacement = readCurrentAudit(audit, keys.auditKey);
+  copyFiles(source, destination, files, { bundle: true, auditReplacement });
   return summary(files);
 }

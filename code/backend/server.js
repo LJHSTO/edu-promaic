@@ -284,13 +284,40 @@ export function createRequestListener({ engine = new ActiveDecisionEngine(), cla
   };
 }
 
+function scheduleSessionRetention(server, profile) {
+  if (!profile?.sweepExpiredSessions) return;
+  function sweep() {
+    try {
+      profile.sweepExpiredSessions();
+    } catch (error) {
+      console.error('[edu-promaic] 学习记录保留策略执行失败', error?.code ?? 'RETENTION_ERROR');
+    }
+  }
+  server.once('listening', () => {
+    sweep();
+    const timer = setInterval(sweep, 60 * 60 * 1000).unref();
+    server.once('close', () => clearInterval(timer));
+  });
+}
+
 export function createServer(options = {}) {
   const { profile } = options;
   if (profile && !profile.tls) throw new Error('受保护课堂必须使用 TLS。');
   const handler = createRequestListener(options);
   const server = profile ? https.createServer(profile.tls, handler) : http.createServer(handler);
   server.requestTimeout = 10_000;
+  scheduleSessionRetention(server, profile);
   return server;
+}
+
+function closeOnSignal(server) {
+  function close() {
+    process.removeListener('SIGINT', close);
+    process.removeListener('SIGTERM', close);
+    server.close();
+  }
+  process.once('SIGINT', close);
+  process.once('SIGTERM', close);
 }
 
 function launchServer(port, host) {
@@ -320,6 +347,7 @@ function launchServer(port, host) {
     console.error(`服务启动失败：${error.code === 'EADDRINUSE' ? '端口已被占用，请设置其他 PORT。' : error.message}`);
     process.exitCode = 1;
   });
+  closeOnSignal(server);
   server.listen(port, host, () => {
     console.log(`Edu ProMAIC 已启动：${process.env.CLASSROOM_PROFILE === 'protected' ? 'https' : 'http'}://${host}:${port}`);
   });

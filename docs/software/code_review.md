@@ -19,7 +19,8 @@
 | 检查项 | 结果 | 依据 |
 |---|---|---|
 | 语法与静态检查 | 0 个错误，0 条警告 | `npm run check`、`npm run lint` |
-| 单元及接口回归 | 85 项通过 | 64 项单元测试和 21 项接口测试。覆盖课堂流程、异步保护、记忆窗口、班级授权、模型请求超时、审计检查点及备份恢复。 |
+| 单元及接口回归 | 96 项通过 | 75 项单元测试和 21 项接口测试。覆盖课堂流程、异步保护、班级授权、学习记录留存、审计轮转及备份恢复。 |
+| HTTPS 系统测试 | 1 项通过 | 使用临时证书和文件凭据启动进程，验证停机轮转、保留策略、重启续写和启动检查点。 [系统测试](../../tests/system/protected-launch.test.js) |
 | 教学材料检索 | 20 条标注样例通过 | 核对点值、邻域、左右极限、约分和连续性等查询的首条结果，另测版本限制、域外查询与引用隔离。 [检索测试](../../tests/unit/learning_knowledge.test.js#L10) |
 | 浏览器流程 | 通过 | 复核演示及 HTTPS 课堂，并验证 320 px 教师布局、按班级下载 CSV 和学生导出拒绝。 [质量报告](code_quality.md) |
 | 重复代码及依赖 | 0 个重复片段，0 项已知依赖漏洞 | `npm run quality:duplicates` 与 `npm audit --audit-level=high`。 [扫描报告](code_quality.md) |
@@ -63,13 +64,16 @@
 | R10 | [模型选择](../../code/core_engine/learning_agent/agent.js#L91) · [外部调用](../../code/backend/model-planner.js#L34) | SM-V07。外部输出可能截断或选择候选集以外的材料。 | 响应限时限量，只接受完整 JSON 中的候选编号。超时或无效编号使用内置排序。适配器测试核对请求字段及选择边界。 [模型测试](../../tests/unit/learning_agent.test.js#L83) |
 | R11 | [课堂授权](../../code/backend/server.js#L209) · [会话归属](../../code/backend/classroom.js#L284) | 原型角色依赖页面切换，机构场景需要服务端权限。 | 受保护模式校验 RS256 访问令牌、签发方、受众、时间窗和鉴别等级。服务端名册决定班级角色，学生只能访问本人会话。 [授权回归](../../tests/integration/classroom_security.test.js#L130) |
 | R12 | [加密与读取](../../code/backend/classroom-protection.js#L61) | SM-V07。损坏快照或班级文件错配可能被当作有效状态。 | 按班级绑定 AES-256-GCM 认证数据，启动时鉴别版本、密文和业务结构。用例覆盖错误密码材料、错误班级、明文和写入回滚。 [存储与审计测试](../../tests/unit/classroom_protection.test.js#L37) |
-| R13 | [审计快照验证](../../code/backend/classroom-audit.js#L109) · [审计结果](../../code/backend/server.js#L199) | 操作追溯需要验证完整性，也要识别一份真实旧快照被当作当前记录。 | 授权与结果分别记录，读取限所属班级。归档前与独立保管的签名检查点比对，拒绝已确认历史的回退或分叉。 [审计测试](../../tests/unit/classroom_audit.test.js) |
+| R13 | [审计快照验证](../../code/backend/classroom-audit.js#L137) · [审计结果](../../code/backend/server.js#L199) | 操作追溯需要验证完整性，也要识别一份真实旧快照被当作当前记录。 | 授权与结果分别记录，读取限所属班级。归档前与独立保管的签名检查点比对，拒绝已确认历史的回退或分叉。 [审计测试](../../tests/unit/classroom_audit.test.js) |
 | R14 | [文件容量](../../code/backend/classroom-protection.js#L9) · [审计容量](../../code/backend/classroom-audit.js#L8) | SM-V16。文件作为单进程存储时，容量与归档需要操作约定。 | 班级快照明文与审计日志各限 2 MiB。部署方配置容量监控、集中留存及归档周期。 [归档流程](security.md#审计归档与备份恢复) |
-| R15 | [备份清单](../../code/backend/classroom-backup.js#L68) · [恢复入口](../../code/backend/classroom-backup.js#L126) | 恢复时要能发现缺件、替换和清单修改，并保护已有数据目录。 | 校验班级密文、审计链、文件摘要与清单认证码，验证通过后恢复到新目录。测试读回了课堂会话和审计记录。 [备份测试](../../tests/unit/classroom_backup.test.js) |
+| R15 | [备份清单](../../code/backend/classroom-backup.js#L68) · [恢复入口](../../code/backend/classroom-backup.js#L136) | 恢复时要能发现缺件、替换和清单修改，并保护已有数据目录。 | 校验密文和清单后恢复到新目录。恢复较早的会话时，可携带符合独立检查点的现行审计。验证拒绝旧审计并读回原会话。 [备份测试](../../tests/unit/classroom_backup.test.js) |
 | R16 | [线索回退](../../code/core_engine/learning_agent/agent.js#L134) | 介入策略的原因与执行阶段的故障应分别记录。 | 策略码说明为何启动帮助。回退码说明无材料、校验失败或图谱故障，保留实际执行步骤。 |
 | R17 | [Linux 服务单元](../../deployment/linux/edu-promaic.service) | 应用发布、密钥管理和数据写入分属不同权限。 | 通过独立运行账户、只读发布目录、专用数据目录和文件式凭证约束运行。 [部署流程](deployment.md) |
 | R18 | [课程包校验](../../code/core_engine/learning_agent/course-pack-schema.js#L61) | 版本、来源和概念关系写错时可能把越界片段带入线索。 | 启动时校验课包引用，检索仅使用发布范围内的片段。题目与答案单独校验，答案字段不能进入提示片段。 [课包用例](../../tests/unit/course_pack.test.js) |
 | R19 | [汇总与导出](../../code/backend/classroom.js#L229) · [导出授权](../../code/backend/server.js#L170) | 首次通过率需明确分母，班级导出需要独立授权。 | 按是否提交验证分开计数，CSV 区分四种状态。接口验证同班教师可下载，跨班级或学生被拒绝，导出成功进入审计记录。 [授权测试](../../tests/integration/classroom_security.test.js#L130) |
+| R20 | [审计轮转](../../code/backend/classroom-audit.js#L145) | SM-V16。活动审计达到上限后，需继续写入并保留连续性。 | 核对归档和末尾检查点后生成候选分段，延续全局序号与链头。测试覆盖连续轮转、容量上限和检查点不匹配。 |
+| R21 | [会话留存](../../code/backend/classroom.js#L272) · [清理审计](../../code/backend/protected-profile.js#L41) | 到期会话应退出教师汇总和导出，旧时间和在途回复需单独处理。 | 按成功提交时间自然到期，未知时间的旧记录获得完整周期。删除写入前记录班级审计，跨超时的在途回复无法写回。 [留存测试](../../tests/unit/classroom_retention.test.js) |
+| R22 | [停机处理](../../code/backend/server.js#L313) · [启动检查点](../../code/backend/protected-profile.js#L82) | 服务中断可能使已发出的响应缺少审计结果。 | 正常停机排空连接，保留已完成响应的审计结果。配置独立检查点后，启动拒绝缺失或回退的活动审计。 [系统测试](../../tests/system/protected-launch.test.js) |
 
 ## 6. 复验与跟踪
 

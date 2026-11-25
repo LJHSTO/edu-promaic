@@ -33,6 +33,9 @@ jobs:
         run: npm run lint
       - name: 单元与接口测试
         run: npm test
+      - name: 受保护入口 HTTPS 测试
+        if: runner.os == 'Linux'
+        run: npm run test:protected
       - name: 重复检查
         run: npm run quality:duplicates -- --threshold 0
       - name: 依赖审计

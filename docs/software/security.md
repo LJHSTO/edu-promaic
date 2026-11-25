@@ -12,11 +12,13 @@
 |---|---|
 | 学生 | 读取已发布课件，创建、恢复和提交本人学习会话 |
 | 教师 | 发布所管班级的课程，查看该班汇总与回放，导出只含会话编号和学习结果的 CSV |
-| 审计员 | 读取所管班级的近期审计记录，入口为 `GET /api/classroom/audit?class=班级编号`，最多返回最近 50 条 |
+| 审计员 | 通过 `GET /api/classroom/audit?class=班级编号` 读取本班当前审计分段的最近 50 条记录 |
 
 ## 学习记录与智能体
 
 受保护的课堂记录按班级保存，使用 AES-256-GCM 加密。审计按请求记录操作、结果、时间和主体代号，使用独立密钥计算 HMAC 链。审计报表面向运营人员，学习回放面向授课教师。轮换数据或审计密钥前，先验证现有记录的读取、恢复和迁移流程。
+
+机构可通过 `sessionRetentionDays` 启用会话留存策略，天数从创建或最后一次成功提交起算。读取和重试沿用原到期时间。应用在启动和运行期间每小时清理到期会话，读取和写入学习记录前也会检查。缺少可信时间的旧记录从首次检查起保留一个完整周期。清理审计只记录班级和处理结果。备份、归档和已导出的文件按机构各自的留存策略处理。
 
 服务端根据会话阶段决定是否提供帮助。独立验证阶段只接受作答。智能体按当前课包版本查询已发布材料，使用限定的工具和引用范围。任务输入为课包版本、练习阶段和结构化学习状态，机构账号标识留在身份与会话层。 [系统架构](architecture.md)
 
@@ -38,6 +40,7 @@
        { "subject": "auditor-01", "classId": "calculus-a", "role": "auditor" }
      ],
      "defaultClass": "calculus-a",
+     "sessionRetentionDays": 30,
      "dataDirectory": "/var/lib/edu-promaic",
      "tlsCertFile": "/etc/edu-promaic/tls/chain.pem",
      "tlsKeyFile": "/etc/edu-promaic/tls/private-key.pem"
@@ -52,7 +55,7 @@
    NODE_ENV=production CLASSROOM_PROFILE=protected CLASSROOM_SECURITY_CONFIG=/etc/edu-promaic/security.json npm start
    ```
 
-`npm test` 验证令牌校验、同源写入、班级和会话隔离、加密恢复及审计读取。机构选择启用外部选材时，模型仅接收公开课包片段和提示等级。登录体验、证书信任链、身份目录、存储和日志接入应在目标环境使用验收账号验证。 [系统架构](architecture.md) · [代码质量报告](code_quality.md) · [代码评审记录](code_review.md)
+`npm test` 验证授权、留存、加密恢复和审计。`npm run test:protected` 使用 OpenSSL 生成临时证书，通过真实 HTTPS 启动入口验证文件凭据、到期清理、停机轮转和重启续写。机构选择启用外部选材时，模型仅接收公开课包片段和提示等级。登录体验、证书信任链、身份目录、存储和日志接入应在目标环境使用验收账号验证。 [系统架构](architecture.md) · [代码质量报告](code_quality.md) · [代码评审记录](code_review.md)
 
 ## 审计归档与备份恢复
 
@@ -67,16 +70,33 @@ checkpoint=$(node scripts/classroom-audit.js export \
   (set -C; printf '%s\n' "$checkpoint" > /srv/audit-custody/next-checkpoint.json)
 ```
 
-首次可信归档省略 `--checkpoint`。复核时可用 `verify` 代替 `export`，保留 `--file` 和 `--checkpoint` 参数并省略 `--out`。归档目录和密钥按岗位分开保管。审计文件上限为 2 MiB，机构需配置容量监控、集中留存和归档周期。
+首次可信归档省略 `--checkpoint`。复核时可用 `verify` 代替 `export`，保留 `--file` 和 `--checkpoint` 参数并省略 `--out`。归档目录和密钥按岗位分开保管。单个活动分段上限为 2 MiB，机构根据流量设置容量告警和轮转周期。
 
-备份操作在维护窗口执行，先停止对课堂数据目录的写入。命令验证课程快照、审计链及备份清单，输出部门可独立保管的密文副本。恢复到新目录后，先用验收账号核对原会话及审计记录，再由变更流程切换正式数据目录。
+轮转在维护窗口进行。停止写入后导出当前分段，将完整归档和对应的末尾检查点交由独立保管。`rollover` 核对活动分段、归档与检查点，在新路径生成续写候选，沿用上一段的序号和链头。
+
+```bash
+node scripts/classroom-audit.js rollover \
+  --file /var/lib/edu-promaic/access-audit.json \
+  --archive /srv/audit-custody/current-audit.json \
+  --checkpoint /srv/audit-custody/current-checkpoint.json \
+  --out /var/lib/edu-promaic/access-audit.next.json
+node scripts/classroom-audit.js verify \
+  --file /var/lib/edu-promaic/access-audit.next.json \
+  --checkpoint /srv/audit-custody/current-checkpoint.json
+```
+
+管理员核对候选文件的服务账号权限，在同一目录原子替换活动文件，然后重启。机构可将 `auditCheckpointFile` 指向由独立保管方提供的只读检查点。启动时会核对其与活动分段的关系。每次切换把配置指向新的归档末尾检查点，跨分段核查从各段归档依次进行。
+
+备份操作在维护窗口执行，先停止对课堂数据目录的写入。命令验证课程快照、审计链及备份清单，生成可独立保管的密文副本。恢复较早的学习快照时，用 `--audit-from` 和 `--checkpoint` 保留经过核对的现行审计链。恢复到新目录后，机构先用验收账号核对会话和审计，再按变更流程切换正式数据目录。
 
 ```bash
 export CLASSROOM_STORE_KEY_FILE=/etc/edu-promaic/credentials/store-key
 export CLASSROOM_AUDIT_KEY_FILE=/etc/edu-promaic/credentials/audit-key
 node scripts/classroom-backup.js backup /var/lib/edu-promaic /srv/edu-backups/run-001
 node scripts/classroom-backup.js verify /srv/edu-backups/run-001
-node scripts/classroom-backup.js restore /srv/edu-backups/run-001 /srv/edu-restore/run-001
+node scripts/classroom-backup.js restore /srv/edu-backups/run-001 /srv/edu-restore/run-001 \
+  --audit-from /var/lib/edu-promaic/access-audit.json \
+  --checkpoint /srv/audit-custody/current-checkpoint.json
 ```
 
 备份和恢复使用全新目标目录。保管密钥时保留各备份对应的密钥版本，记录实际恢复用时以及可恢复的数据时间点。审计归档和课堂备份分别匹配机构的日志与学习数据留存策略。
@@ -89,8 +109,8 @@ node scripts/classroom-backup.js restore /srv/edu-backups/run-001 /srv/edu-resto
 |---|---|---|
 | 安全物理环境 | 部署边界和设备清单随机构配置确定 | 机房或云平台的环境、物理访问和容灾证明 |
 | 安全通信网络与区域边界 | HTTPS、同源写入和身份验证 | 网络拓扑、区域划分、出入口策略、传输保护、监测告警和模型访问边界 |
-| 安全计算环境 | 令牌验签、班级与会话授权、快照加密、核验式备份恢复、练习阶段门控及 Linux 最小权限服务单元 | 机构多因素鉴别策略、OS 和服务加固、密钥管理、数据分类、备份与恢复演练 |
-| 安全管理中心 | 独立审计员角色、审计链、全量快照归档及检查点连续性校验 | 安全日志集中采集和告警值守、访问分权、统一时钟与日志留存。相关网络日志按《网络安全法》第二十三条留存不少于六个月。 [现行网络安全法](https://shca.miit.gov.cn/zwgk/zcwj/flfg/art/2025/art_c502acb4374848e0a7752925c72fe775.html) |
+| 安全计算环境 | 令牌验签、班级与会话授权、会话期限、快照加密、核验式备份恢复、练习阶段门控及 Linux 最小权限服务单元 | 机构多因素鉴别策略、OS 和服务加固、密钥管理、数据分类、备份与恢复演练 |
+| 安全管理中心 | 独立审计员角色、审计链、归档和分段续写及启动检查点核验 | 安全日志集中采集和告警值守、访问分权、统一时钟与日志留存。相关网络日志按《网络安全法》第二十三条留存不少于六个月。 [现行网络安全法](https://shca.miit.gov.cn/zwgk/zcwj/flfg/art/2025/art_c502acb4374848e0a7752925c72fe775.html) |
 | 安全管理制度、机构、人员、建设及运维 | 部署手册、权限边界、版本记录和质量检查 | 岗位职责、账号开通与撤销流程、变更审批、供应商管理、培训、应急演练和事件处置记录 |
 
 商用密码应用单独按系统适用规定管理。依法需要使用商用密码保护的系统，应由运营方制定密码应用方案、核对密码产品及服务要求，并开展商用密码应用安全性评估。 [信息系统密码应用基本要求](https://openstd.samr.gov.cn/bzgk/std/newGbInfo?hcno=53282C88712CE157043B7A2C590278FC) · [商用密码应用安全性评估管理办法](https://www.sca.gov.cn/sca/xxgk/2023-10/07/content_1061109.shtml)

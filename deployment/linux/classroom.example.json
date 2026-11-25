@@ -9,6 +9,7 @@
     { "subject": "auditor-01", "classId": "calculus-a", "role": "auditor" }
   ],
   "defaultClass": "calculus-a",
+  "sessionRetentionDays": 30,
   "dataDirectory": "/var/lib/edu-promaic",
   "publicKeyFile": "/etc/edu-promaic/identity-public.pem",
   "tlsCertFile": "/etc/edu-promaic/tls-chain.pem",
