@@ -4,7 +4,7 @@
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-339933)](https://nodejs.org/)
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-blue)](LICENSE)
 
-知点（Edu ProMAIC）是一款主动学习工作台。学生在课程中阅读、操作和练习，按自己的偏好获得帮助，再通过一道新题检查理解。教师可以沿学习过程找到卡点，调整课程活动。
+知点（Edu ProMAIC）是面向大一微积分翻转课堂的课前准备度工具。教师布置一节预习任务，学生阅读材料、完成分级提示练习和独立验证。上课前，教师查看首次通过情况与作答过程，决定课堂讨论哪类误解。
 
 ## 体验知点
 
@@ -14,23 +14,24 @@
 
 https://github.com/user-attachments/assets/88507c7a-c416-4ac1-85a0-2b95fc526f21
 
-从一节“函数值与极限”开始：设置帮助偏好，动手探索图形，查看课程出处，完成独立练习，最后进入教师工作台回看过程。下载仓库后，打开 `docs/software/walkthrough/index.html` 即可体验。
+第一课是“函数值与极限”。运行服务即可体验教师发布、学生作答和教师回看。视频和离线交互原型展示了后续图形活动和帮助偏好的设计。
 
-技术设计采用 React、NestJS、LangGraph 和 PostgreSQL + pgvector，通过学科包扩展更多课程。仓库同时提供轻量规则服务与自动化测试，便于逐步接入完整学习流程。
+学习智能体使用 LangGraph 编排提示。它根据会话中的错答和已用线索确定检索方向，通过概念关系和课包检索找到带出处的材料，必要时调用数值比较工具。独立验证由服务端保护。教师回放可以核对每次提示使用的工具和材料。 [技术架构](docs/software/architecture.md)
 
 ## 本地运行
 
-需要 Node.js 22 或更新版本和随附的 npm。项目使用 Node.js 内置模块，没有需要安装的第三方依赖，也不需要模型密钥。
+演示服务使用 Node.js 22 或更新版本。安装锁定依赖后启动，即可使用内置课程检索、工具和提示编排。
 
 ```powershell
 git clone https://github.com/LJHSTO/edu-promaic.git
 cd edu-promaic
+npm ci --ignore-scripts
 npm start
 ```
 
-在浏览器访问 [http://localhost:3000](http://localhost:3000)。页面与 API 由同一服务提供。停止服务时在终端按 `Ctrl+C`。
+在浏览器访问 [本地翻转课堂](http://127.0.0.1:3000/)。页面与 API 由同一服务提供。停止服务时在终端按 `Ctrl+C`。
 
-规则交互原型入口：[http://localhost:3000/prototype/](http://localhost:3000/prototype/)。包含学生学习工作台、教师示例记录筛选与回放、CSV 预览，以及等待和失败恢复。
+历史规则交互原型包含学生工作台、教师示例记录、CSV 预览及故障模拟。[第三周原型](http://127.0.0.1:3000/prototype/)
 
 端口被占用时，PowerShell 中可这样换端口：
 
@@ -39,29 +40,35 @@ $env:PORT = '3001'
 npm start
 ```
 
-默认只监听本机。接入班级前需完成账户与权限模块，详见[技术架构](docs/software/architecture.md)。
+演示课堂接受回环连接，使用匿名会话。发布和作答记录保存在 `output/classroom.json`，也可通过 `CLASSROOM_FILE` 选择另一份记录。浏览器刷新或服务重启后可继续原会话。
+
+机构课堂使用受保护配置，在 HTTPS 上接入机构身份，根据班级分配师生及审计权限，并加密保存课堂记录。部署、验收和等保三级对照见[安全与部署](docs/software/security.md)。
 
 ## 试一遍学习流程
 
-1. 在练习题中选择错误答案并提交。第一次错误只给出对错反馈，连续两次错误后出现自我解释提示。
-2. 点击“再给一点线索”查看下一层提示，也可以收起提示或关闭本题主动提示。
-3. 答对练习题后进入独立验证。此时提示区清空，求助按钮不可用。
-4. 完成验证后查看本轮结果。“在提示后答对”和“验证题独立答对”分别记录。
-
-学习状态保存在当前页面，刷新会重新开始。提示根据错误次数、冷却时间和提示预算触发。
+1. 在教师入口发布“函数值与极限”。切换到学生入口，查看预习材料并开始练习。
+2. 连续两次选择点值 `1`，展开“线索依据”查看学习记录、检索和引用。继续求助可看到独立数值对照，也可以暂停线索。
+3. 练习选 `4`，进入无提示验证。刷新页面，确认仍在验证。先选 `7`，再选 `6`，查看重试后完成的结果。
+4. 切回教师入口，核对本轮计入验证提交和完成，首次通过为 0。打开会话回放，查看点值误选与提示记录。上课可围绕“只改变单点取值时，极限是否改变”组织讨论。
 
 ## 检查与测试
 
+开发检查使用 Node.js 22.13 或更新的 Node.js 22 版本，也可使用 Node.js 24。首次执行静态检查前安装锁定的开发依赖。
+
 ```powershell
+npm ci --ignore-scripts
 npm run check
+npm run lint
 npm test
+npm run quality:duplicates
+npm audit --audit-level=high
 ```
 
-`npm test` 运行全部单元和接口集成测试。也可用 `npm run test:unit`、`npm run test:integration` 分别运行。GitHub Actions 在推送和 Pull Request 时执行相同检查。
+`npm test` 运行全部单元和接口集成测试。也可用 `npm run test:unit`、`npm run test:integration` 分别运行。GitHub Actions 在推送和 Pull Request 时执行上述检查。代码质量作业见[扫描与重构报告](docs/software/code_quality.md)和[代码评审记录](docs/software/code_review.md)。
 
 ## 接口示例
 
-`GET /api/health` 检查服务；`POST /api/decision/evaluate` 根据上下文返回决策。PowerShell 调用示例：
+`GET /api/health` 检查服务。课堂 API 提供发布、创建与恢复会话、提交操作、教师汇总和机构审计。演示配置支持单独调用规则 API `POST /api/decision/evaluate`。以下为 PowerShell 示例。
 
 ```powershell
 $context = @{ consecutiveErrors = 2; misconceptionType = 'limit_equals_function_value' }
@@ -83,7 +90,7 @@ Invoke-RestMethod -Uri 'http://localhost:3000/api/decision/evaluate' -Method Pos
 }
 ```
 
-请求字段、默认值和错误响应见[接口说明](docs/software/接口说明.md)。演示接口不保存学习记录；调用方负责维护单题上下文。
+规则接口直接评估传入的上下文。课堂接口从服务端会话构建规则上下文并保存事件。 [接口说明](docs/software/接口说明.md)
 
 ## 仓库结构
 
@@ -95,12 +102,13 @@ docs/
   mgmt/           团队协作、迭代计划、风险与议题落实记录
   retrospection/  阶段复盘
 code/
-  backend/        HTTP 服务和静态页面入口
-  frontend/       学生练习演示
+  backend/        HTTP、课程包、课堂状态与本地存储
+  frontend/       学生预习与教师课前回看
   core_engine/    不依赖网络或存储的决策逻辑
+                  learning_agent/ 包含编排、工具、课程知识与记忆
 tests/
   unit/           决策规则测试
-  integration/    HTTP 接口测试
+  integration/    HTTP 接口及课堂流程测试
 .github/          自动检查、Issue 和 PR 模板
 data/             预留课程包、知识图谱与脱敏测试素材
 ```
