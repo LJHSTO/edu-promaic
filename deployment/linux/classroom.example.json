@@ -1,0 +1,17 @@
+{
+  "issuer": "https://identity.example.edu",
+  "audience": "https://learn.example.edu/api",
+  "origin": "https://learn.example.edu",
+  "acceptedAcr": ["urn:example:auth:mfa"],
+  "memberships": [
+    { "subject": "student-01", "classId": "calculus-a", "role": "student" },
+    { "subject": "teacher-01", "classId": "calculus-a", "role": "teacher" },
+    { "subject": "auditor-01", "classId": "calculus-a", "role": "auditor" }
+  ],
+  "defaultClass": "calculus-a",
+  "sessionRetentionDays": 30,
+  "dataDirectory": "/var/lib/edu-promaic",
+  "publicKeyFile": "/etc/edu-promaic/identity-public.pem",
+  "tlsCertFile": "/etc/edu-promaic/tls-chain.pem",
+  "tlsKeyFile": "/run/credentials/edu-promaic.service/tls-private.pem"
+}

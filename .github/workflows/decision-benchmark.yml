@@ -1,0 +1,49 @@
+name: 决策接口性能基准
+
+on:
+  push:
+    paths:
+      - .github/workflows/decision-benchmark.yml
+      - scripts/benchmark-classroom.js
+      - code/backend/**
+      - code/core_engine/**
+      - package.json
+      - package-lock.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: 4 核 / 8 GiB / Node.js 22
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 设置 Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: 安装依赖
+        run: npm ci --ignore-scripts
+      - name: 运行 10 分钟基准
+        run: |
+          sudo systemd-run --quiet --collect --wait --pipe \
+            --uid="$(id -u)" --gid="$(id -g)" \
+            --working-directory="$GITHUB_WORKSPACE" \
+            --property=AllowedCPUs=0-3 --property=CPUQuota=400% \
+            --property=MemoryMax=8G --property=MemorySwapMax=0 \
+            "$(command -v node)" scripts/benchmark-classroom.js --reference
+      - name: 保存原始样本与验收结果
+        if: ${{ !cancelled() && hashFiles('output/benchmark-classroom.json') != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: decision-benchmark-${{ github.sha }}
+          path: output/benchmark-classroom.json
+          if-no-files-found: error
+          retention-days: 30

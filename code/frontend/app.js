@@ -38,14 +38,19 @@ let busy = false;
 
 function updateControls() {
   const protectedPhase = phase !== 'practice';
+  const hasHint = Boolean(byId('scaffoldContent').textContent);
   byId('helpBtn').disabled = busy || protectedPhase || userOptedOut;
   byId('muteBtn').disabled = busy || protectedPhase;
-  byId('collapseBtn').disabled = busy || protectedPhase || !byId('scaffoldContent').textContent || userOptedOut;
+  byId('collapseBtn').disabled = busy || protectedPhase || !hasHint || userOptedOut;
   byId('submitBtn').disabled = busy || phase === 'done';
   byId('verifyBtn').disabled = busy;
   byId('muteBtn').textContent = userOptedOut ? '恢复本题提示' : '关闭本题主动提示';
   document.querySelectorAll('input[name="opt"]').forEach(input => { input.disabled = busy || phase === 'done'; });
   byId('answerForm').setAttribute('aria-busy', String(busy));
+  updatePhasePresentation(protectedPhase);
+}
+
+function updatePhasePresentation(protectedPhase) {
   const sourceNote = document.querySelector('.source-note');
   if (sourceNote) {
     sourceNote.hidden = protectedPhase;
@@ -84,6 +89,55 @@ function clearHint(message) {
   byId('collapseBtn').textContent = '收起线索';
 }
 
+async function simulateDemoResponse(signal) {
+  const control = byId('demoResponse');
+  if (!control) return;
+  const mode = control.value;
+  control.value = 'live';
+  if (mode === 'error') throw new Error('评审模拟连接失败');
+  if (mode === 'timeout') {
+    await new Promise((resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('评审模拟超时')), { once: true });
+    });
+  }
+  if (mode === 'slow') await new Promise(resolve => setTimeout(resolve, 1200));
+}
+
+function isValidDecision(data, protectedPhase) {
+  if (!data || !['INTERVENE', 'SILENCE'].includes(data.action)) return false;
+  if (!Number.isInteger(data.level) || data.level < 0 || data.level > 5) return false;
+  if (data.action === 'INTERVENE') return !protectedPhase && Boolean(hints[data.level]);
+  return true;
+}
+
+async function requestDecision(context, signal) {
+  const response = await fetch('/api/decision/evaluate', {
+    method: 'POST', signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(context)
+  });
+  const result = await response.json();
+  if (!response.ok || !result?.success || !isValidDecision(result.data, context.inProtectedAssessment)) {
+    throw new Error('无效的决策响应');
+  }
+  return result.data;
+}
+
+function displayDecision(result, requestedHelp) {
+  if (result.action === 'SILENCE') {
+    byId('agentStatus').textContent = result.reason;
+    return;
+  }
+  currentLevel = result.level;
+  lastInterventionAt = Date.now();
+  if (!requestedHelp) interventionsUsed++;
+  usedSupportInPractice = true;
+  byId('agentStatus').textContent = `当前线索：L${currentLevel}`;
+  byId('scaffoldContent').textContent = hints[currentLevel];
+  byId('scaffoldContent').hidden = false;
+  byId('collapseBtn').textContent = '收起线索';
+}
+
 async function evaluate({ nextErrors = consecutiveErrors, requestedHelp = false, misconceptionType = null } = {}) {
   const activeElement = document.activeElement;
   busy = true;
@@ -94,42 +148,14 @@ async function evaluate({ nextErrors = consecutiveErrors, requestedHelp = false,
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
   try {
-    const demoResponse = byId('demoResponse');
-    const demoMode = demoResponse?.value;
-    if (demoResponse) demoResponse.value = 'live';
-    if (demoMode === 'error') throw new Error('评审模拟连接失败');
-    if (demoMode === 'timeout') {
-      await new Promise((resolve, reject) => controller.signal.addEventListener('abort', () => reject(new Error('评审模拟超时')), { once: true }));
-    }
-    if (demoMode === 'slow') await new Promise(resolve => setTimeout(resolve, 1200));
-    const response = await fetch('/api/decision/evaluate', {
-      method: 'POST', signal: controller.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        consecutiveErrors: nextErrors, currentLevel, interventionsUsed, requestedHelp,
-        inProtectedAssessment: phase === 'verification', userOptedOut, misconceptionType,
-        secondsSinceLastIntervention: lastInterventionAt === null ? null : (Date.now() - lastInterventionAt) / 1000
-      })
-    });
-    const result = await response.json();
-    if (!response.ok || !result.success || !result.data ||
-        (phase === 'verification' && result.data.action !== 'SILENCE') ||
-        !['INTERVENE', 'SILENCE'].includes(result.data.action) ||
-        !Number.isInteger(result.data.level) || result.data.level < 0 || result.data.level > 5 ||
-        (result.data.action === 'INTERVENE' && !hints[result.data.level])) {
-      throw new Error('无效的决策响应');
-    }
+    await simulateDemoResponse(controller.signal);
+    const result = await requestDecision({
+      consecutiveErrors: nextErrors, currentLevel, interventionsUsed, requestedHelp,
+      inProtectedAssessment: phase === 'verification', userOptedOut, misconceptionType,
+      secondsSinceLastIntervention: lastInterventionAt === null ? null : (Date.now() - lastInterventionAt) / 1000
+    }, controller.signal);
     consecutiveErrors = nextErrors;
-    if (result.data.action === 'INTERVENE') {
-      currentLevel = result.data.level;
-      lastInterventionAt = Date.now();
-      if (!requestedHelp) interventionsUsed++;
-      usedSupportInPractice = true;
-      byId('agentStatus').textContent = `当前线索：L${currentLevel}`;
-      byId('scaffoldContent').textContent = hints[currentLevel];
-      byId('scaffoldContent').hidden = false;
-      byId('collapseBtn').textContent = '收起线索';
-    } else byId('agentStatus').textContent = result.data.reason;
+    displayDecision(result, requestedHelp);
     return true;
   } catch {
     byId('feedback').textContent = '暂时无法连接提示服务，选择已保留。请稍后重试。';
@@ -146,7 +172,42 @@ async function evaluate({ nextErrors = consecutiveErrors, requestedHelp = false,
   }
 }
 
-byId('answerForm').addEventListener('submit', async event => {
+function finishPractice() {
+  consecutiveErrors = 0;
+  byId('feedback').textContent = usedSupportInPractice
+    ? '这道题做对了。再做一道无提示题，看看能否独立完成。'
+    : '这道题独立答对了。可以再做一道题验证一下。';
+  byId('practiceResult').textContent = usedSupportInPractice ? '练习：使用线索后完成' : '练习：未使用线索完成';
+  byId('verifyBtn').hidden = false;
+  byId('submitBtn').hidden = true;
+  byId('helpBtn').hidden = true;
+}
+
+function finishVerification() {
+  verificationAttempts++;
+  const firstPass = verificationAttempts === 1;
+  byId('feedback').textContent = firstPass
+    ? '首次独立验证通过。可以把这次结果作为一条学习记录。'
+    : '重试后完成验证。以后再换一道题，检查是否理解得更稳定。';
+  byId('verificationResult').textContent = firstPass
+    ? '验证：首次独立通过'
+    : `验证：第 ${verificationAttempts} 次提交后完成`;
+  phase = 'done';
+  byId('restartBtn').hidden = false;
+  updateControls();
+}
+
+function showIncorrectFeedback() {
+  if (phase === 'verification') {
+    verificationAttempts++;
+    byId('feedback').textContent = '这次还不正确，可以再试。验证阶段不提供线索。';
+    byId('verificationResult').textContent = '验证：首次未通过，仍在尝试';
+  } else {
+    byId('feedback').textContent = '这次还不正确，可以重新想一想再提交。';
+  }
+}
+
+async function submitAnswer(event) {
   event.preventDefault();
   if (busy || phase === 'done') return;
   const selected = document.querySelector('input[name="opt"]:checked');
@@ -157,43 +218,18 @@ byId('answerForm').addEventListener('submit', async event => {
   byId('feedback').removeAttribute('data-error');
   const problem = problems[phase];
   if (selected.value === problem.answer) {
-    if (phase === 'practice') {
-      consecutiveErrors = 0;
-      byId('feedback').textContent = usedSupportInPractice
-        ? '这道题做对了。再做一道无提示题，看看能否独立完成。'
-        : '这道题独立答对了。可以再做一道题验证一下。';
-      byId('practiceResult').textContent = usedSupportInPractice ? '练习：使用线索后完成' : '练习：未使用线索完成';
-      byId('verifyBtn').hidden = false;
-      byId('submitBtn').hidden = true;
-      byId('helpBtn').hidden = true;
-      return;
-    }
-    verificationAttempts++;
-    byId('feedback').textContent = verificationAttempts === 1
-      ? '首次独立验证通过。可以把这次结果作为一条学习记录。'
-      : '重试后完成验证。以后再换一道题，检查是否理解得更稳定。';
-    byId('verificationResult').textContent = verificationAttempts === 1
-      ? '验证：首次独立通过' : `验证：第 ${verificationAttempts} 次提交后完成`;
-    phase = 'done';
-    byId('restartBtn').hidden = false;
-    updateControls();
+    if (phase === 'practice') finishPractice();
+    else finishVerification();
     return;
   }
   const success = await evaluate({
     nextErrors: consecutiveErrors + 1,
     misconceptionType: selected.value === problem.pointValue ? 'limit_equals_function_value' : null
   });
-  if (success) {
-    if (phase === 'verification') {
-      verificationAttempts++;
-      byId('feedback').textContent = '这次还不正确，可以再试。验证阶段不提供线索。';
-      byId('verificationResult').textContent = '验证：首次未通过，仍在尝试';
-    } else {
-      byId('feedback').textContent = '这次还不正确，可以重新想一想再提交。';
-    }
-  }
-});
+  if (success) showIncorrectFeedback();
+}
 
+byId('answerForm').addEventListener('submit', submitAnswer);
 byId('helpBtn').addEventListener('click', () => {
   if (!busy && phase === 'practice' && !userOptedOut) evaluate({ requestedHelp: true });
 });

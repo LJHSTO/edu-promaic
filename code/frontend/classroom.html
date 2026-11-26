@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f5ee">
+  <title>知点 · 微积分翻转课堂</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/classroom/classroom.css">
+  <script type="module" src="/classroom/classroom.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到课堂内容</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#student">
+        <span class="brand-mark" aria-hidden="true">ƒ</span>
+        <span><strong>知点</strong><small>Edu ProMAIC</small></span>
+      </a>
+      <nav class="view-nav" aria-label="课堂入口">
+        <a id="studentLink" href="#student" aria-current="page">学生预习</a>
+        <a id="teacherLink" href="#teacher">教师备课</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="shell" id="main" tabindex="-1">
+    <div class="request-message" id="requestError" hidden>
+      <p id="requestErrorText" role="alert"></p>
+      <button class="secondary" id="retryButton" type="button" hidden>重试</button>
+    </div>
+    <p class="loading" id="loadingMessage" role="status">正在加载课堂…</p>
+
+    <div id="studentView" hidden>
+      <section class="hero" aria-labelledby="studentTitle">
+        <p class="eyebrow">微积分翻转课堂 <span aria-hidden="true">/</span> 课前预习</p>
+        <h1 id="studentTitle" tabindex="-1"></h1>
+        <p id="studentObjective"></p>
+      </section>
+
+      <section class="card waiting-card" id="unpublished" aria-labelledby="waitingTitle" hidden>
+        <h2 id="waitingTitle">等待教师发布</h2>
+        <p>任务发布后，预习材料和练习会显示在这里。</p>
+        <button class="secondary" id="reloadClassroom" type="button">检查发布状态</button>
+      </section>
+
+      <div class="learning-layout" id="published" hidden>
+        <aside class="card progress" aria-labelledby="progressTitle">
+          <h2 id="progressTitle">预习进度</h2>
+          <ol id="progressSteps">
+            <li data-phase="reading"><span aria-hidden="true">1</span>阅读材料</li>
+            <li data-phase="practice"><span aria-hidden="true">2</span>概念练习</li>
+            <li data-phase="verification"><span aria-hidden="true">3</span>独立验证</li>
+            <li data-phase="complete"><span aria-hidden="true">4</span>预习结果</li>
+          </ol>
+        </aside>
+
+        <div class="student-content">
+          <section class="card reading-card" id="reading" aria-labelledby="readingTitle" hidden>
+            <h2 id="readingTitle" tabindex="-1">阅读材料</h2>
+            <p class="lead" id="prework"></p>
+            <div class="worked-example">
+              <h3>想一想</h3>
+              <p>当 <var>x</var> ≠ 1 时，<var>h</var>(<var>x</var>) = <var>x</var> + 2。单独规定 <var>h</var>(1) = 5。</p>
+              <dl class="example-values">
+                <div><dt>当 <var>x</var> 靠近 1 时</dt><dd><var>h</var>(<var>x</var>) 趋近于 3</dd></div>
+                <div><dt>当 <var>x</var> 等于 1 时</dt><dd><var>h</var>(1) 等于 5</dd></div>
+              </dl>
+              <p>观察附近的趋势可以求极限。直接代入只在满足相应条件时适用。</p>
+            </div>
+            <a class="source-link" id="lessonSource" hidden></a>
+            <div class="actions">
+              <button id="startSession" type="button">开始概念练习</button>
+            </div>
+          </section>
+
+          <section class="card exercise-card" id="exercise" aria-labelledby="questionTitle" hidden>
+            <h2 id="questionTitle" tabindex="-1"></h2>
+            <p class="muted" id="verificationNote" hidden>独立作答。提交后查看对错。</p>
+            <form id="answerForm">
+              <fieldset id="answerGroup">
+                <legend class="question" id="questionPrompt"></legend>
+                <div class="options" id="answerOptions"></div>
+              </fieldset>
+              <div class="actions">
+                <button id="submitAnswer" type="submit" disabled>提交答案</button>
+              </div>
+            </form>
+            <p class="feedback" id="answerFeedback" role="status" aria-live="polite" hidden></p>
+
+            <section class="help-panel" id="practiceHelp" aria-labelledby="helpTitle" hidden>
+              <h3 id="helpTitle">思路线索</h3>
+              <p class="muted" id="hintStatus"></p>
+              <p class="hint-text" id="hintText" hidden></p>
+              <div class="hint-example" id="hintExample" hidden>
+                <h4>比较另一组数值</h4>
+                <p id="hintExampleText"></p>
+              </div>
+              <a class="source-link" id="hintSource" hidden></a>
+              <details class="hint-evidence" id="hintEvidence" hidden>
+                <summary>线索依据</summary>
+                <p class="muted" id="hintOutcome" hidden></p>
+                <p class="muted" id="hintMemory" hidden></p>
+                <ol class="hint-steps" id="hintSteps" hidden></ol>
+                <ul class="hint-citations" id="hintCitations" hidden></ul>
+              </details>
+              <div class="actions">
+                <button class="secondary" id="requestHint" type="button">获取线索</button>
+                <button class="quiet" id="toggleHelp" type="button">暂停提示</button>
+              </div>
+            </section>
+          </section>
+
+          <section class="card result-card" id="result" aria-labelledby="resultTitle" hidden>
+            <h2 id="resultTitle" tabindex="-1">预习已完成</h2>
+            <dl class="result-items">
+              <div><dt>概念练习</dt><dd id="practiceResult"></dd></div>
+              <div><dt>独立验证</dt><dd id="verificationResult"></dd></div>
+            </dl>
+            <p class="muted">这次预习记录已保存，教师可在备课时查看。</p>
+            <button class="secondary" id="newSession" type="button">开始新一轮匿名预习</button>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div id="teacherView" hidden>
+      <section class="hero" aria-labelledby="teacherTitle">
+        <p class="eyebrow">微积分翻转课堂 <span aria-hidden="true">/</span> 教师备课</p>
+        <h1 id="teacherTitle" tabindex="-1">课堂准备工作台</h1>
+        <p>发布课前任务，查看学生的练习表现和典型卡点。</p>
+      </section>
+
+      <section class="card publish-card" aria-labelledby="publishTitle">
+        <div>
+          <p class="eyebrow">预习任务 <span aria-hidden="true">/</span> <span id="publishStatus"></span></p>
+          <h2 id="publishTitle"></h2>
+          <p class="muted" id="teacherObjective"></p>
+        </div>
+        <div class="actions">
+          <button id="publishLesson" type="button" hidden>发布课前任务</button>
+          <a class="button secondary" id="openStudent" href="#student" hidden>打开学生端</a>
+        </div>
+      </section>
+
+      <section class="overview" aria-labelledby="overviewTitle">
+        <div class="section-heading">
+          <h2 id="overviewTitle">预习概况</h2>
+          <div class="actions">
+            <button class="secondary" id="refreshTeacher" type="button">刷新数据</button>
+            <a class="button secondary" id="exportTeacher" aria-label="下载预习记录 CSV" download>下载 CSV</a>
+          </div>
+        </div>
+        <dl class="metrics">
+          <div><dt>已开始</dt><dd data-metric="sessions">—</dd></div>
+          <div><dt>练习完成</dt><dd data-metric="practiceCompleted">—</dd></div>
+          <div><dt>用过线索</dt><dd data-metric="usedHint">—</dd></div>
+          <div><dt>已尝试验证</dt><dd data-metric="verificationStarted">—</dd></div>
+          <div><dt>验证首次通过</dt><dd data-metric="firstPass">—</dd></div>
+          <div><dt>预习完成</dt><dd data-metric="completed">—</dd></div>
+        </dl>
+        <p class="muted metrics-note" id="verificationMetrics" role="status"></p>
+      </section>
+
+      <div class="teacher-grid">
+        <section class="card" aria-labelledby="sessionsTitle">
+          <h2 id="sessionsTitle">最近预习记录</h2>
+          <p class="muted" id="sessionsEmpty">学生开始练习后，这里会出现预习记录。</p>
+          <ul class="session-list" id="recentSessions"></ul>
+        </section>
+        <section class="card replay-card" aria-labelledby="replayTitle">
+          <h2 id="replayTitle">学习过程回放</h2>
+          <p class="muted" id="replayEmpty">选择一条预习记录，查看每次作答和提示。</p>
+          <div id="replayContent" hidden>
+            <p class="replay-summary" id="replaySummary"></p>
+            <p class="muted" id="timelineEmpty" hidden>这条记录还没有作答或提示。</p>
+            <ol class="timeline" id="timeline"></ol>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <noscript><p class="request-message">请启用 JavaScript 后使用课堂工作台。</p></noscript>
+  </main>
+
+  <footer class="shell footer">
+    <span>知点 · 微积分课前预习</span>
+  </footer>
+</body>
+</html>

@@ -17,12 +17,45 @@ jobs:
         node: [22, 24]
     steps:
       - name: 检出代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: 设置 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ matrix.node }}
+          cache: npm
+      - name: 安装检查工具
+        run: npm ci --ignore-scripts
       - name: 语法检查
         run: npm run check
+      - name: 静态检查
+        run: npm run lint
       - name: 单元与接口测试
         run: npm test
+      - name: 受保护入口 HTTPS 测试
+        if: runner.os == 'Linux'
+        run: npm run test:protected
+      - name: 重复检查
+        run: npm run quality:duplicates -- --threshold 0
+      - name: 依赖审计
+        run: npm audit --audit-level=high
+      - name: 检查 Linux 服务单元
+        if: runner.os == 'Linux'
+        run: |
+          unit_dir="$RUNNER_TEMP/edu-promaic-unit"
+          mkdir -p "$unit_dir"
+          sed "s|^ExecStart=/usr/bin/node |ExecStart=$(command -v node) |" deployment/linux/edu-promaic.service > "$unit_dir/edu-promaic.service"
+          systemd-analyze --man=no --recursive-errors=no verify "$unit_dir/edu-promaic.service"
+      - name: 启动安装后的 Linux 课堂服务
+        if: runner.os == 'Linux' && matrix.node == 22
+        run: bash tests/system/linux-service.sh
+      - name: 验证 Nginx 双段 HTTPS 与审计关联
+        if: runner.os == 'Linux' && matrix.node == 22
+        run: |
+          if ! command -v nginx >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends nginx
+          fi
+          nginx -v
+          node --test tests/system/nginx-gateway.js

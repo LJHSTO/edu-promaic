@@ -1,15 +1,18 @@
 {
   "name": "edu-promaic",
   "version": "0.1.0",
-  "description": "Edu ProMAIC: 面向大学新生微积分课堂的主动学习 Agent 系统",
+  "description": "Edu ProMAIC: 面向大一微积分翻转课堂的课前准备度工具",
   "main": "code/core_engine/index.js",
   "scripts": {
     "start": "node code/backend/server.js",
     "dev:backend": "node --watch code/backend/server.js",
-    "check": "node --check code/backend/server.js && node --check code/core_engine/decision_engine.js && node --check code/frontend/app.js && node --check docs/software/prototype/prototype.js && node --check docs/software/prototype/teacher-preview.js && node --check docs/software/walkthrough/体验.js",
+    "check": "node scripts/check-syntax.js",
+    "lint": "eslint code docs/software/prototype docs/software/walkthrough tests scripts eslint.config.js --max-warnings 0 && eslint --config tests/research-policy-eslint.config.mjs code/core_engine/research_policy --max-warnings 0",
+    "quality:duplicates": "jscpd --format javascript --min-tokens 40 --min-lines 3 --reporters console,json --output output/quality code docs/software/prototype docs/software/walkthrough",
     "test": "node --test tests/unit/*.test.js tests/integration/*.test.js",
     "test:unit": "node --test tests/unit/*.test.js",
-    "test:integration": "node --test tests/integration/*.test.js"
+    "test:integration": "node --test tests/integration/*.test.js",
+    "test:protected": "node --test tests/system/*.test.js"
   },
   "keywords": [
     "education",
@@ -23,5 +26,15 @@
   "type": "module",
   "engines": {
     "node": ">=22"
+  },
+  "devDependencies": {
+    "eslint": "10.15.0",
+    "globals": "16.5.0",
+    "jscpd": "5.4.3"
+  },
+  "dependencies": {
+    "@langchain/core": "1.5.1",
+    "@langchain/langgraph": "1.7.5",
+    "zod": "4.6.7"
   }
 }
