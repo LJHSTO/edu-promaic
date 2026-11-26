@@ -22,6 +22,7 @@
 | 单元及接口回归 | 99 项通过 | 77 项单元测试和 22 项接口测试。覆盖课堂流程、异步保护、班级授权、学习记录留存、审计预留、轮转及备份恢复。 |
 | HTTPS 系统测试 | 2 项通过 | 用临时证书和文件凭据启动服务，验证停机轮转、留存、重启检查点，以及容量不足时拒绝发布并记录告警。 [系统测试](../../tests/system/protected-launch.test.js) |
 | Linux 安装验证 | 通过 | Ubuntu 上启动安装后的 systemd 服务，验证证书和回环监听、服务账号、目录权限，以及 `401` 响应与签名审计的关联。 [安装测试](../../tests/system/linux-service.sh) |
+| Nginx 网关 | 通过 | 使用参考模板启动网关。核对匿名 `401`、Bearer 读取、Cookie 同源写入与跨源拒绝，以及上游证书名称、CA 和访问日志。 [网关测试](../../tests/system/nginx-gateway.js) |
 | 教学材料检索 | 20 条标注样例通过 | 核对点值、邻域、左右极限、约分和连续性等查询的首条结果，另测版本限制、域外查询与引用隔离。 [检索测试](../../tests/unit/learning_knowledge.test.js#L10) |
 | 浏览器流程 | 通过 | 复核演示及 HTTPS 课堂，并验证 320 px 教师布局、按班级下载 CSV 和学生导出拒绝。 [质量报告](code_quality.md) |
 | 重复代码及依赖 | 0 个重复片段，0 项已知依赖漏洞 | `npm run quality:duplicates` 与 `npm audit --audit-level=high`。 [扫描报告](code_quality.md) |
@@ -79,6 +80,7 @@
 | R24 | [环境约束与验收](../../scripts/benchmark-classroom.js#L129) | 性能基准需要可复现的资源上限，也需要识别缺样、错误响应和指标超限。 | 工作流设置 4 核、8 GiB 与禁用交换空间。脚本核验约束，再检查样本数、响应内容、状态码和 P95，保存逐请求结果。 [基准工作流](../../.github/workflows/decision-benchmark.yml#L34) · [基准结果](code_quality.md#决策接口性能) |
 | R25 | [审计容量预留](../../code/backend/classroom-audit.js#L200) · [响应结果](../../code/backend/server.js#L199) | 活动分段接近上限时，授权记录写入后可能没有足够空间写入结果。客户端断开也会绕过正常响应结束事件。 | 执行业务前预留结果记录的容量。HTTP 响应完成或连接关闭时只写一次结果。测试确认余量不足的发布返回 `503`，审计和课程文件保持原样。 [断线测试](../../tests/integration/classroom_security.test.js#L187) · [HTTPS 容量测试](../../tests/system/protected-launch.test.js#L181) |
 | R26 | [容量告警](../../code/backend/classroom-audit.js#L175) | 运维需要在活动分段写满之前安排归档。 | 在 80% 和 95% 发出分级容量事件，每个进程对同一级别记录一次。系统测试核对进程日志，事件仅含级别和容量数据。 [运维命令](deployment.md#配置网关与验收) |
+| R27 | [网关模板](../../deployment/linux/nginx-classroom.example.conf) | 独立服务测试无法覆盖网关上游证书校验、浏览器同源授权和访问日志字段。 | 用两段 HTTPS 启动网关与课堂服务。核对同源写入和跨源拒绝，证书名称或 CA 不匹配时返回 `502`，并将访问日志请求编号与签名审计对应。 [网关测试](../../tests/system/nginx-gateway.js) |
 
 ## 6. 复验与跟踪
 

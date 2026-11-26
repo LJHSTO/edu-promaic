@@ -49,27 +49,17 @@ sudo systemctl status edu-promaic.service
 
 ## 配置网关与验收
 
-机构登录服务在课堂公开源设置会话 Cookie。网关将课堂 UI 与 API 转发至 `https://127.0.0.1:3443`，保留客户端 `Origin`，并使用内部 DNS 名称和机构 CA 校验后端证书。以下为 Nginx HTTPS 虚拟主机中的课堂转发段。 [Nginx 上游 TLS 配置](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_ssl_verify)
+将 Nginx 模板放入 `http` 配置区，例如 `/etc/nginx/conf.d/edu-promaic.conf`。填写浏览器访问的站点名和站点证书链、私钥路径，以及课堂服务证书上的内部名称和签发 CA。网关通过 HTTPS 转发至 `127.0.0.1:3443`，按内部名称校验证书。多个虚拟主机共用监听地址时，将默认虚拟主机的 TLS 版本和请求头容量与课堂配置对齐。先运行 `sudo nginx -t`，检查通过后再执行 `sudo systemctl reload nginx`。 [Nginx 课堂模板](../../deployment/linux/nginx-classroom.example.conf) · [Nginx 上游 TLS 配置](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_ssl_verify) · [TLS 虚拟主机选项](https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_protocols)
 
-```nginx
-location / {
-    proxy_pass https://127.0.0.1:3443;
-    proxy_set_header Host $host;
-    proxy_set_header Origin $http_origin;
-    proxy_ssl_server_name on;
-    proxy_ssl_name classroom-backend.example.edu;
-    proxy_ssl_trusted_certificate /etc/nginx/trust/classroom-ca.pem;
-    proxy_ssl_verify on;
-}
-```
+机构登录与回调在同一 HTTPS 源配置独立路由，由登录服务设置 `__Host-edu-promaic` Cookie。课堂路由保留客户端 `Origin` 和凭据，由应用按站点源、令牌声明与班级名册授予权限。 [浏览器凭据约定](security.md#身份与授权)
 
-网关访问日志保留时间、请求方法、状态和请求编号，排除查询参数、会话标识、Cookie 和访问令牌。受保护课堂的访问结果含 `X-Request-Id`，Nginx 可记录 `$upstream_http_x_request_id`，供审计员关联授权及拒绝记录。 [Nginx 上游响应变量](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#var_upstream_http_)
+课堂访问日志只写时间、请求方法、状态和应用返回的请求编号。审计员用响应中的 `X-Request-Id` 关联授权及拒绝记录。错误日志用于故障诊断，按运维权限保管。 [Nginx 访问日志](https://nginx.org/en/docs/http/ngx_http_log_module.html#log_format) · [Nginx 上游响应变量](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#var_upstream_http_)
 
 - 确认端口 `3443` 只监听回环地址。通过网关访问 `/api/health`，核对受信任证书与 `200` 响应。
 - 未登录时访问 `/api/classroom` 应返回 `401`。使用验收账号核对同班教师发布、学生作答和审计员读取记录，再验证跨班级或跨角色访问返回 `403`。
 - 用 `systemd-analyze security edu-promaic.service` 核对进程账户、文件系统沙箱和网络设置，用 `journalctl -u edu-promaic.service` 查看启动与检查结果。服务启动检查与机构测评分别记录。 [安全验收矩阵](security.md#等保三级对照)
 
-Linux 自动检查安装并启动参考服务单元，使用测试证书和凭据验证 HTTPS、回环监听、运行账号、目录权限及拒绝记录的审计签名。 [安装测试](../../tests/system/linux-service.sh)
+Linux 自动检查安装并启动参考服务单元，验证回环监听、运行账号和目录权限。网关测试用两份独立证书启动 Nginx 与课堂服务，核对同源授权、拒绝响应和签名审计。 [安装测试](../../tests/system/linux-service.sh) · [网关测试](../../tests/system/nginx-gateway.js)
 
 运维可用 `journalctl -u edu-promaic.service --grep=CLASSROOM_AUDIT_CAPACITY` 查看审计容量事件，并在集中日志平台按 `warning` 和 `critical` 设告警。 [阈值与轮转步骤](security.md#审计归档与备份恢复) · [journalctl 筛选](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html#-g)
 

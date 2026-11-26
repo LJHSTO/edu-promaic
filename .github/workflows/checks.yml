@@ -50,3 +50,12 @@ jobs:
       - name: 启动安装后的 Linux 课堂服务
         if: runner.os == 'Linux' && matrix.node == 22
         run: bash tests/system/linux-service.sh
+      - name: 验证 Nginx 双段 HTTPS 与审计关联
+        if: runner.os == 'Linux' && matrix.node == 22
+        run: |
+          if ! command -v nginx >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends nginx
+          fi
+          nginx -v
+          node --test tests/system/nginx-gateway.js

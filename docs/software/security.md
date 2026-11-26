@@ -55,7 +55,7 @@
    NODE_ENV=production CLASSROOM_PROFILE=protected CLASSROOM_SECURITY_CONFIG=/etc/edu-promaic/security.json npm start
    ```
 
-`npm test` 验证授权、留存、加密恢复和审计。`npm run test:protected` 使用 OpenSSL 生成临时证书，通过真实 HTTPS 启动入口验证文件凭据、到期清理、停机轮转和重启续写。机构选择启用外部选材时，模型仅接收公开课包片段和提示等级。登录体验、证书信任链、身份目录、存储和日志接入应在目标环境使用验收账号验证。 [系统架构](architecture.md) · [代码质量报告](code_quality.md) · [代码评审记录](code_review.md)
+`npm test` 验证授权、留存、加密恢复和审计。`npm run test:protected` 使用临时证书验证文件凭据、到期清理、停机轮转和重启续写。Nginx 测试核对两段 HTTPS、应用授权及日志关联。在目标环境使用验收账号核对机构登录、证书信任链、身份目录、存储和日志接入。机构启用外部选材时，模型输入限于公开课包片段和提示等级。 [系统架构](architecture.md) · [Linux 部署](deployment.md) · [代码质量报告](code_quality.md)
 
 ## 审计归档与备份恢复
 

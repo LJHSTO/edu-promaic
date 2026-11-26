@@ -35,14 +35,14 @@
 
 | 检查 | 结果 |
 |---|---|
-| 静态分析 | ESLint 10.15.0 检查 47 个文件，0 错误、0 告警。最高圈复杂度 10 |
+| 静态分析 | ESLint 10.15.0 检查 49 个文件，0 错误、0 告警。最高圈复杂度 10 |
 | 重复检查 | jscpd 5.4.3 分析 25 个运行脚本、4,104 行，0 个重复片段，重复行比例 0.00% |
-| 自动测试 | 99 项单元及接口测试、2 项 HTTPS 系统测试通过。Ubuntu 安装测试通过 |
+| 自动测试 | 99 项单元及接口测试、2 项 HTTPS 系统测试通过。Ubuntu 安装测试与 Nginx 网关测试通过 |
 | 覆盖率 | Node 单元及接口测试载入的模块合计行覆盖率 94.42%、分支 90.09%。智能体编排行 97.83%、分支 93.68% |
 | 浏览器 | Chrome 验证演示课堂和受保护课堂的发布、学生验证、教师回放、失联重试与角色隔离。补验窄屏导出和缺少可信时间的旧记录回放 |
 | 依赖审计 | 本轮 npm 审计报告 0 项已知漏洞 |
 
-接口测试覆盖幂等重传、迟到线索拒绝、授权导出、客户端断线和重启恢复。智能体测试验证课包、图谱、会话记忆、模型超时及选材回退。HTTPS 系统测试覆盖清理、轮转、启动检查点及审计容量不足。Ubuntu 安装测试通过参考 systemd 单元启动服务，核对 `401` 响应编号与签名审计记录。 [HTTPS 系统测试](../../tests/system/protected-launch.test.js) · [Linux 安装测试](../../tests/system/linux-service.sh) · [安全与部署](security.md)
+接口测试覆盖幂等重传、迟到线索拒绝、授权导出、客户端断线和重启恢复。智能体测试验证课包、图谱、会话记忆、模型超时及选材回退。HTTPS 系统测试覆盖清理、轮转、启动检查点和审计容量不足。网关测试验证同源写入、两段证书校验和访问日志与签名审计的关联。 [HTTPS 系统测试](../../tests/system/protected-launch.test.js) · [Linux 安装测试](../../tests/system/linux-service.sh) · [Nginx 网关测试](../../tests/system/nginx-gateway.js)
 
 ## 决策接口性能
 
@@ -63,7 +63,7 @@ Linux 纯规则 P95 低于 10 ms，HTTP 并发 P95 低于 200 ms，非预期 5xx
 
 ## 复验
 
-安装锁定依赖并执行以下检查。GitHub Actions 在 Linux 和 Windows 上运行 Node.js 22 和 24 的矩阵。Linux 任务运行 HTTPS 系统测试，Node.js 22 任务同时安装并启动参考服务单元。
+安装锁定依赖并执行以下检查。GitHub Actions 在 Linux 和 Windows 上运行 Node.js 22 和 24 的矩阵。Linux 任务运行 HTTPS 系统测试，Node.js 22 任务同时验证 systemd 安装和 Nginx 网关。
 
 ```bash
 npm ci --ignore-scripts
@@ -75,4 +75,4 @@ npm run quality:duplicates -- --threshold 0
 npm audit --audit-level=high
 ```
 
-如需复现 Node.js 覆盖率，运行 `node --test --experimental-test-coverage tests/unit/*.test.js tests/integration/*.test.js`。浏览器流程见运行说明。 [启动与流程](../../README.md#试一遍学习流程)
+环境备有 Nginx 和 OpenSSL 时，可运行 `node --test tests/system/nginx-gateway.js` 复验网关。运行 `node --test --experimental-test-coverage tests/unit/*.test.js tests/integration/*.test.js` 可复现覆盖率。 [启动与流程](../../README.md#试一遍学习流程)
