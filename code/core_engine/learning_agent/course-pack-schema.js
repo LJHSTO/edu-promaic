@@ -2,6 +2,7 @@ import { URL } from 'node:url';
 import { z } from 'zod';
 
 const identifier = z.string().max(100).regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/);
+export { identifier as courseIdentifierSchema };
 const version = z.string().max(100).regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*-v[1-9][0-9]*$/);
 const passageIdentifier = z.string().max(201).regex(/^[a-z][a-z0-9-]+\/[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/);
 const authoredText = z.string().trim().min(1);

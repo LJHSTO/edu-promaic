@@ -19,7 +19,7 @@
 | 检查项 | 结果 | 依据 |
 |---|---|---|
 | 语法与静态检查 | 0 个错误，0 条警告 | `npm run check`、`npm run lint` |
-| 单元及接口回归 | 99 项通过 | 77 项单元测试和 22 项接口测试。覆盖课堂流程、异步保护、班级授权、学习记录留存、审计预留、轮转及备份恢复。 |
+| 单元及接口回归 | 102 项通过 | 80 项单元测试和 22 项接口测试。覆盖课堂流程、图谱检索范围、异步保护、班级授权、学习记录留存、审计预留、轮转及备份恢复。 |
 | HTTPS 系统测试 | 2 项通过 | 用临时证书和文件凭据启动服务，验证停机轮转、留存、重启检查点，以及容量不足时拒绝发布并记录告警。 [系统测试](../../tests/system/protected-launch.test.js) |
 | Linux 安装验证 | 通过 | Ubuntu 上启动安装后的 systemd 服务，验证证书和回环监听、服务账号、目录权限，以及 `401` 响应与签名审计的关联。 [安装测试](../../tests/system/linux-service.sh) |
 | Nginx 网关 | 通过 | 使用参考模板启动网关。核对匿名 `401`、Bearer 读取、Cookie 同源写入与跨源拒绝，以及上游证书名称、CA 和访问日志。 [网关测试](../../tests/system/nginx-gateway.js) |
@@ -81,6 +81,7 @@
 | R25 | [审计容量预留](../../code/backend/classroom-audit.js#L200) · [响应结果](../../code/backend/server.js#L199) | 活动分段接近上限时，授权记录写入后可能没有足够空间写入结果。客户端断开也会绕过正常响应结束事件。 | 执行业务前预留结果记录的容量。HTTP 响应完成或连接关闭时只写一次结果。测试确认余量不足的发布返回 `503`，审计和课程文件保持原样。 [断线测试](../../tests/integration/classroom_security.test.js#L187) · [HTTPS 容量测试](../../tests/system/protected-launch.test.js#L73) |
 | R26 | [容量告警](../../code/backend/classroom-audit.js#L175) | 运维需要在活动分段写满之前安排归档。 | 在 80% 和 95% 发出分级容量事件，每个进程对同一级别记录一次。系统测试核对进程日志，事件仅含级别和容量数据。 [运维命令](deployment.md#配置网关与验收) |
 | R27 | [网关模板](../../deployment/linux/nginx-classroom.example.conf) | 独立服务测试无法覆盖网关上游证书校验、浏览器同源授权和访问日志字段。 | 用两段 HTTPS 启动网关与课堂服务。核对同源写入和跨源拒绝，证书名称或 CA 不匹配时返回 `502`，并将访问日志请求编号与签名审计对应。 [网关测试](../../tests/system/nginx-gateway.js#L103) |
+| R28 | [图谱与检索编排](../../code/core_engine/learning_agent/agent.js#L63) · [课包检索范围](../../code/core_engine/learning_agent/knowledge.js#L72) | 主检索自行展开课包关系，无法体现当次图谱工具返回的范围。 | 主检索接收核验过的邻接编号，补查只选一个相邻概念。模型选材和输出均校验同一范围。回归测试确认已发布但相距两跳的课包片段不进入模型候选或显示结果。 [范围回归](../../tests/unit/learning_agent.test.js#L120) · [检索工具回归](../../tests/unit/learning_knowledge.test.js#L59) |
 
 ## 6. 复验与跟踪
 

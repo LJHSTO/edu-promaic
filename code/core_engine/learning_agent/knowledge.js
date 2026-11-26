@@ -1,10 +1,11 @@
-import { parseCoursePack } from './course-pack-schema.js';
+import { courseIdentifierSchema, parseCoursePack } from './course-pack-schema.js';
 import { coursePack } from './knowledge-data.js';
 
 export { courseVersion, focusConceptId } from './knowledge-data.js';
 
 const queryLimit = 500;
 const resultLimit = 5;
+export const relatedConceptIdsSchema = courseIdentifierSchema.array();
 
 function normalize(value) {
   return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -68,11 +69,25 @@ function validBounds(maxLevel, limit) {
     Number.isInteger(limit) && limit >= 1;
 }
 
-function retrieveCourse(knowledge, { query, conceptId, courseVersion: version, limit = 3, maxLevel = 5 } = {}) {
+function retrievalScope(knowledge, conceptId, version, relatedConceptIds) {
+  let requested = null;
+  if (relatedConceptIds !== undefined) {
+    const parsed = relatedConceptIdsSchema.safeParse(relatedConceptIds);
+    if (!parsed.success) return null;
+    requested = new Set(parsed.data);
+  }
+  const scope = new Set([conceptId]);
+  for (const { conceptId: neighborId } of expandCourse(knowledge, { conceptId, courseVersion: version })) {
+    if (requested === null || requested.has(neighborId)) scope.add(neighborId);
+  }
+  return scope;
+}
+
+function retrieveCourse(knowledge, { query, conceptId, courseVersion: version, limit = 3, maxLevel = 5, relatedConceptIds } = {}) {
   const normalized = normalizedQuery(query);
   if (!isCourseConcept(knowledge, conceptId, version) || !normalized || !validBounds(maxLevel, limit)) return [];
-  const neighbors = expandCourse(knowledge, { conceptId, courseVersion: version });
-  const scope = new Set([conceptId, ...neighbors.map(neighbor => neighbor.conceptId)]);
+  const scope = retrievalScope(knowledge, conceptId, version, relatedConceptIds);
+  if (!scope) return [];
   const matches = knowledge.searchIndex.filter(({ passage }) => scope.has(passage.conceptId) && passage.level <= maxLevel)
     .map(({ passage, terms }) => ({ passage, score: rankMatch(normalized, terms) }))
     .filter(({ score }) => score > 0);

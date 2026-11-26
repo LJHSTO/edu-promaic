@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   courseVersion, expandKnowledge, focusConceptId, lookupKnowledge, retrieveKnowledge
 } from '../../code/core_engine/learning_agent/knowledge.js';
+import { searchPassagesTool } from '../../code/core_engine/learning_agent/tools.js';
 
 const focus = { conceptId: focusConceptId, courseVersion };
 const id = key => `${courseVersion}/${key}`;
@@ -53,6 +54,27 @@ test('知识图谱携带关系，检索只展开当前概念的一跳邻居', ()
   const neighboringScope = { ...focus, conceptId: 'continuity', query: '可去间断与补点' };
   assert.equal(retrieveKnowledge(neighboringScope)[0]?.id, id('removable-extension'));
   assert.deepEqual(expandKnowledge({ ...focus, courseVersion: 'unpublished' }), []);
+});
+
+test('显式图谱范围保留当前概念，只纳入已发布课包的一跳邻居', async () => {
+  const query = '观察依据 左右极限 因式分解 补点';
+  const requested = ['sided-limits', 'removable-discontinuity', 'foreign-course-concept'];
+  const scoped = retrieveKnowledge({ ...focus, query, relatedConceptIds: requested });
+  const scopedIds = new Set(scoped.map(passage => passage.id));
+  assert.deepEqual(scopedIds, new Set([id('compare-observations'), id('two-sided-criterion')]));
+  assert.deepEqual(retrieveKnowledge({ ...focus, query, relatedConceptIds: [] }).map(passage => passage.id),
+    [id('compare-observations')]);
+  assert.ok(retrieveKnowledge({ ...focus, query }).some(passage => passage.id === id('factor-and-cancel')));
+  assert.deepEqual(await searchPassagesTool.invoke({ ...focus, query, limit: 3, maxLevel: 5, relatedConceptIds: requested }), scoped);
+});
+
+test('图谱范围格式无效时返回空结果，工具拒绝非规范概念标识', async () => {
+  for (const invalid of [null, {}, 'sided-limits', [null], [''], [' sided-limits'], ['Sided-Limits']]) {
+    assert.deepEqual(retrieveKnowledge({ ...focus, query: '观察依据', relatedConceptIds: invalid }), []);
+  }
+  await assert.rejects(searchPassagesTool.invoke({
+    ...focus, query: '观察依据', limit: 3, maxLevel: 5, relatedConceptIds: [' sided-limits']
+  }));
 });
 
 test('提示等级和检索条数约束候选，等分时返回顺序稳定', () => {

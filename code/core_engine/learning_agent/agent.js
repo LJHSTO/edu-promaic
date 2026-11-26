@@ -1,6 +1,6 @@
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { expandConceptTool, searchPassagesTool, contrastTool } from './tools.js';
-import { focusConceptId, lookupKnowledge } from './knowledge.js';
+import { expandKnowledge, focusConceptId, lookupKnowledge } from './knowledge.js';
 
 const stateSchema = Annotation.Root({
   input: Annotation(),
@@ -10,6 +10,7 @@ const stateSchema = Annotation.Root({
   policyReason: Annotation(),
   level: Annotation(),
   neighbors: Annotation(),
+  conceptScope: Annotation(),
   passages: Annotation(),
   candidate: Annotation(),
   selectedPassage: Annotation(),
@@ -48,8 +49,11 @@ function queryFor({ memory }, level) {
 
 async function expand({ input }, expandConcept) {
   try {
-    const neighbors = await expandConcept.invoke({ courseVersion: input.courseVersion, conceptId: focusConceptId });
-    if (!Array.isArray(neighbors)) throw new TypeError('无效的图谱结果。');
+    const request = { courseVersion: input.courseVersion, conceptId: focusConceptId };
+    const related = await expandConcept.invoke(request);
+    if (!Array.isArray(related)) throw new TypeError('无效的图谱结果。');
+    const selected = new Set(related.map(neighbor => neighbor?.conceptId));
+    const neighbors = expandKnowledge(request).filter(({ conceptId }) => selected.has(conceptId));
     return { steps: ['memory', 'concept-graph'], tools: [expandConcept.name], neighbors };
   } catch {
     return { steps: ['memory', 'concept-graph'], tools: [expandConcept.name], reason: 'CONCEPT_GRAPH_UNAVAILABLE' };
@@ -57,15 +61,17 @@ async function expand({ input }, expandConcept) {
 }
 
 async function retrieve({ input, level, neighbors }, search, broad = false) {
-  const related = neighbors[0];
-  const query = broad && related ? related.label : queryFor(input, level);
+  const related = broad ? neighbors.slice(0, 1) : neighbors;
+  const query = broad ? related[0].label : queryFor(input, level);
+  const relatedConceptIds = related.map(({ conceptId }) => conceptId);
+  const conceptScope = [focusConceptId, ...relatedConceptIds];
   const steps = [broad ? 'retrieve-related' : 'retrieve'];
   try {
     const passages = await search.invoke({
-      query, conceptId: focusConceptId, courseVersion: input.courseVersion, maxLevel: level, limit: 4
+      query, conceptId: focusConceptId, relatedConceptIds, courseVersion: input.courseVersion, maxLevel: level, limit: 4
     });
     if (!Array.isArray(passages)) throw new TypeError('无效的检索结果。');
-    return { steps, tools: [search.name], passages, reason: null };
+    return { steps, tools: [search.name], passages, conceptScope, reason: null };
   } catch {
     return { steps, tools: [search.name], reason: 'KNOWLEDGE_UNAVAILABLE' };
   }
@@ -83,16 +89,17 @@ function choosePassage(passages, seenSourceIds) {
   return passages.find(passage => !seenSourceIds.includes(passage.citation.id)) ?? passages[0];
 }
 
-function approvedPassage(passage, courseVersion, level, trustPassage) {
+function approvedPassage(passage, { input, level, conceptScope }, trustPassage) {
   if (typeof passage?.id !== 'string') return null;
-  const approved = trustPassage({ id: passage.id, courseVersion });
+  const approved = trustPassage({ id: passage.id, courseVersion: input.courseVersion });
   if (!approved || approved.level > level || approved.text !== passage.text) return null;
-  return approved;
+  return conceptScope.includes(approved.conceptId) ? approved : null;
 }
 
-async function selectPassage({ input, level, passages }, planner, trustPassage) {
+async function selectPassage(state, planner, trustPassage) {
+  const { input, level, passages } = state;
   const { seenSourceIds } = input.memory;
-  const usable = passages.map(passage => approvedPassage(passage, input.courseVersion, level, trustPassage)).filter(Boolean);
+  const usable = passages.map(passage => approvedPassage(passage, state, trustPassage)).filter(Boolean);
   const unseen = usable.filter(passage => !seenSourceIds.includes(passage.citation.id));
   const selectedPassage = choosePassage(usable, seenSourceIds) ?? null;
   if (!planner || unseen.length < 2) return { selectedPassage };
@@ -116,9 +123,10 @@ async function prepareCandidate({ selectedPassage: passage, level }, contrast) {
   }
 }
 
-function validateCandidate({ input, candidate, level }, trustPassage) {
+function validateCandidate(state, trustPassage) {
+  const { candidate, level } = state;
   const { passage, example } = candidate;
-  const approved = approvedPassage(passage, input.courseVersion, level, trustPassage);
+  const approved = approvedPassage(passage, state, trustPassage);
   if (!approved) {
     return { steps: ['validate'], reason: 'CITATION_REJECTED', outcome: 'pending' };
   }
@@ -138,8 +146,9 @@ function fallback({ level, reason }, approvedFallback) {
   };
 }
 
-function afterRetrieve({ passages }) {
-  return passages?.length ? 'rank' : 'retrieve-related';
+function afterRetrieve({ passages, neighbors }) {
+  if (passages?.length) return 'rank';
+  return neighbors.length ? 'retrieve-related' : 'fallback';
 }
 
 function makeGraph({ engine, approvedFallback, tools, trustPassage, planner }) {

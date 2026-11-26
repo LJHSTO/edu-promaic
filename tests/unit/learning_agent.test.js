@@ -3,10 +3,12 @@ import test from 'node:test';
 import { ActiveDecisionEngine } from '../../code/core_engine/index.js';
 import { createLearningAgent } from '../../code/core_engine/learning_agent/agent.js';
 import { projectLearningMemory } from '../../code/core_engine/learning_agent/memory.js';
-import { courseVersion, lookupKnowledge } from '../../code/core_engine/learning_agent/knowledge.js';
+import { courseVersion, focusConceptId, lookupKnowledge } from '../../code/core_engine/learning_agent/knowledge.js';
 import { createModelPlanner } from '../../code/backend/model-planner.js';
 
 const misconception = 'limit_equals_function_value';
+const sidedLimits = { conceptId: 'sided-limits', label: '左右极限' };
+const nearbyExpressions = { conceptId: 'equivalent-nearby-expressions', label: '邻域内等价的表达式' };
 const fallback = level => ({ level, text: '教学备用线索', source: { label: '课程说明' } });
 const build = options => createLearningAgent({ engine: new ActiveDecisionEngine(), approvedFallback: fallback, ...options });
 
@@ -53,7 +55,7 @@ test('真实状态图使用已发布引用和独立数值工具', async () => {
 test('会话记忆在同一提示等级优先选用近期未引用的候选', async () => {
   const ids = ['punctured-neighborhood', 'nearby-domain-check'].map(key => `${courseVersion}/${key}`);
   const passages = ids.map(id => lookupKnowledge({ id, courseVersion }));
-  const expand = tool('expand', () => []);
+  const expand = tool('expand', () => [nearbyExpressions]);
   const search = tool('search', ({ maxLevel }) => {
     assert.equal(maxLevel, 3);
     return passages;
@@ -87,11 +89,14 @@ test('会话记忆只看最近 16 个事件及最近 6 个不同来源', () => {
 
 test('主检索无匹配时按图谱邻接概念补查一次，无证据时提供固定提示', async () => {
   const queries = [];
-  const expand = tool('expand', () => [{ label: '左右极限' }]);
-  const search = tool('search', request => { queries.push(request.query); return []; });
+  const expand = tool('expand', () => [sidedLimits, nearbyExpressions]);
+  const search = tool('search', request => { queries.push(request); return []; });
   const result = await build({ tools: { expand, search } })(input({ requestedHelp: true }));
   assert.equal(queries.length, 2);
-  assert.equal(queries[1], '左右极限');
+  assert.equal(queries[0].conceptId, focusConceptId);
+  assert.deepEqual(queries[0].relatedConceptIds, [sidedLimits.conceptId, nearbyExpressions.conceptId]);
+  assert.equal(queries[1].query, sidedLimits.label);
+  assert.deepEqual(queries[1].relatedConceptIds, [sidedLimits.conceptId]);
   assert.equal(result.trace.outcome, 'fallback');
   assert.equal(result.trace.reason, 'NO_APPROVED_PASSAGE');
   assert.equal(result.trace.policyReason, 'REQUESTED_HELP');
@@ -100,7 +105,7 @@ test('主检索无匹配时按图谱邻接概念补查一次，无证据时提�
 });
 
 test('补查失败记录真实步骤和检索原因，保留政策触发原因', async () => {
-  const expand = tool('expand', () => [{ label: '左右极限' }]);
+  const expand = tool('expand', () => [sidedLimits]);
   const search = tool('search', ({ query }) => {
     if (query === '左右极限') throw new Error('课程检索暂不可用');
     return [];
@@ -110,6 +115,37 @@ test('补查失败记录真实步骤和检索原因，保留政策触发原因',
   assert.deepEqual(trace.steps.slice(-3), ['retrieve', 'retrieve-related', 'fallback']);
   assert.equal(trace.reason, 'KNOWLEDGE_UNAVAILABLE');
   assert.equal(trace.policyReason, 'REPEATED_ERRORS');
+});
+
+test('编排拒绝图谱范围外的真实课包片段，不会交给模型或显示引用', async () => {
+  const outsideId = `${courseVersion}/removable-extension`;
+  const distant = lookupKnowledge({ id: outsideId, courseVersion });
+  const expand = tool('expand', () => [sidedLimits, { conceptId: distant.conceptId, label: '可去间断' }]);
+  let offered;
+  const planner = ({ passages }) => {
+    offered = passages.map(passage => passage.id);
+    return outsideId;
+  };
+  const query = input({ requestedHelp: true, currentLevel: 2 });
+  const noMatch = tool('search', () => [distant]);
+  const result = await build({ tools: { expand, search: noMatch }, planner })(query);
+  assert.equal(result.trace.outcome, 'fallback');
+  assert.equal(result.trace.reason, 'CITATION_REJECTED');
+  assert.deepEqual(result.trace.sourceIds, []);
+  assert.equal(result.hint.text, '教学备用线索');
+  assert.equal(offered, undefined);
+
+  const retainedIds = ['punctured-neighborhood', 'two-sided-criterion'].map(key => `${courseVersion}/${key}`);
+  const retained = retainedIds.map(id => lookupKnowledge({ id, courseVersion }));
+  let requestedScope;
+  const mixed = tool('search', request => {
+    requestedScope = request.relatedConceptIds;
+    return [distant, ...retained];
+  });
+  const grounded = await build({ tools: { expand, search: mixed }, planner })(query);
+  assert.deepEqual(requestedScope, [sidedLimits.conceptId]);
+  assert.deepEqual(offered, retainedIds);
+  assert.deepEqual(grounded.trace.sourceIds, [retainedIds[0]]);
 });
 
 test('检索结果缺字段或未命中审核材料时不能直接展示', async () => {
