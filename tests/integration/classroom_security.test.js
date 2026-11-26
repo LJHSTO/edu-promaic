@@ -113,10 +113,15 @@ async function startProtected(t) {
 
 test('受保护课堂要求凭证，保留课堂入口并关闭历史演示接口', async t => {
   assert.throws(() => createServer({ profile: {} }), /必须使用 TLS/);
-  const { base, request } = await startProtected(t);
+  const { base, request, auditFile } = await startProtected(t);
   const challenge = await request('', { status: 401 });
   assert.equal(challenge.headers.get('www-authenticate'), 'Bearer');
   assert.equal(challenge.headers.get('cache-control'), 'no-store');
+  const challengeId = challenge.headers.get('x-request-id');
+  assert.match(challengeId, /^[0-9a-f-]{36}$/);
+  const { records: [denial] } = JSON.parse(await readFile(auditFile, 'utf8'));
+  assert.equal(denial.outcome, 'denied');
+  assert.equal(denial.requestId, challengeId);
   const page = await fetch(base);
   assert.equal(page.status, 200);
   assert.match(page.headers.get('strict-transport-security'), /max-age=/);
@@ -183,7 +188,7 @@ test('加密会话重启后可读，审计员只能查看本班的去标识记�
   const { base, request, start, stop, storeFile, auditFile } = await startProtected(t);
   await publish(request);
   await publish(request, otherTeacher, secondClass);
-  await publish(request, student, firstClass, 403);
+  const forbidden = await publish(request, student, firstClass, 403);
   const fresh = (await begin(request, student)).data;
   const token = credential(student);
   const event = { eventId: 'learning-event-only', revision: fresh.revision, action: 'answer', choice: 'b' };
@@ -217,5 +222,6 @@ test('加密会话重启后可读，审计员只能查看本班的去标识记�
   assert.ok(entries.some(record => record.action === 'session.event' && record.outcome === 'success'));
   const denied = entries.find(record => record.action === 'lesson.publish' && record.outcome === 'denied');
   assert.match(denied.actor, /^[a-f0-9]{64}$/);
+  assert.equal(denied.requestId, forbidden.headers.get('x-request-id'));
   assert.ok(!JSON.stringify(entries).includes(student));
 });

@@ -208,6 +208,7 @@ function recordOutcome(res, profile, context) {
 
 function protectedContext(req, res, url, route, profile) {
   const context = { action: route.action, classId: profile.resolveClass(url.searchParams.get('class')), requestId: randomUUID() };
+  res.setHeader('X-Request-Id', context.requestId);
   let room;
   try {
     context.actor = profile.authenticate(req);
@@ -225,7 +226,6 @@ function protectedContext(req, res, url, route, profile) {
   } catch (error) {
     return denyClassroom(res, error);
   }
-  res.setHeader('X-Request-Id', context.requestId);
   recordOutcome(res, profile, context);
   return { room, profile, classId: context.classId, owner: context.actor.subject };
 }

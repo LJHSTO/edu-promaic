@@ -47,3 +47,6 @@ jobs:
           mkdir -p "$unit_dir"
           sed "s|^ExecStart=/usr/bin/node |ExecStart=$(command -v node) |" deployment/linux/edu-promaic.service > "$unit_dir/edu-promaic.service"
           systemd-analyze --man=no --recursive-errors=no verify "$unit_dir/edu-promaic.service"
+      - name: 启动安装后的 Linux 课堂服务
+        if: runner.os == 'Linux' && matrix.node == 22
+        run: bash tests/system/linux-service.sh
