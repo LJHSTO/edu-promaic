@@ -1,7 +1,8 @@
 import { once } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { availableParallelism, cpus, release, totalmem, version } from 'node:os';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { setTimeout as wait } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
@@ -17,6 +18,7 @@ const endpoint = '/api/decision/evaluate';
 const requestTimeoutMs = 4_500;
 const fullWorkload = { warmup: 100, measurements: 1_000, clients: 30, intervalMs: 5_000, durationMs: 600_000 };
 const smokeWorkload = { warmup: 3, measurements: 10, clients: 3, intervalMs: 100, durationMs: 300 };
+const acceptanceLimits = { engineP95Ms: 10, concurrentP95Ms: 200, unexpected5xxRate: 0.01 };
 
 function distribution(values) {
   if (values.length === 0) return { p50: null, p95: null, p99: null };
@@ -124,12 +126,49 @@ function environment() {
   };
 }
 
+function referenceLimits(machine) {
+  if (machine.platform !== 'linux') throw new Error('参考测量需要 Linux cgroup v2。');
+  const unified = readFileSync('/proc/self/cgroup', 'utf8').split('\n').find(line => line.startsWith('0::'));
+  if (!unified) throw new Error('参考测量需要 Linux cgroup v2。');
+  const cgroupDirectory = join('/sys/fs/cgroup', unified.slice(3));
+  const readLimit = name => readFileSync(join(cgroupDirectory, name), 'utf8').trim();
+  const [quota, period] = readLimit('cpu.max').split(/\s+/).map(Number);
+  const limits = {
+    cpuSet: readLimit('cpuset.cpus.effective'),
+    cpuParallelism: machine.availableParallelism,
+    cpuQuotaCores: quota / period,
+    memoryLimitBytes: Number(readLimit('memory.max')),
+    effectiveMemoryLimitBytes: process.constrainedMemory(),
+    swapLimitBytes: Number(readLimit('memory.swap.max'))
+  };
+  const { cpuCores, memoryBytes } = referenceEnvironment;
+  if (limits.cpuParallelism !== cpuCores || limits.cpuQuotaCores !== cpuCores || limits.memoryLimitBytes !== memoryBytes ||
+      limits.effectiveMemoryLimitBytes !== memoryBytes || limits.swapLimitBytes !== 0) {
+    throw new Error(`参考测量要求 4 核、8 GiB 并关闭交换空间，实际约束 ${JSON.stringify(limits)}。`);
+  }
+  return limits;
+}
+
+function evaluateAcceptance(workload, engine, serialHttp, concurrentHttp) {
+  const expectedConcurrent = Math.ceil(workload.durationMs / workload.intervalMs) * workload.clients;
+  const checks = {
+    engineLatency: engine.sampleCount === workload.measurements && engine.percentilesMs.p95 <= acceptanceLimits.engineP95Ms,
+    serialRequests: serialHttp.successCount === workload.measurements,
+    concurrentLatency: concurrentHttp.percentilesMs.p95 !== null && concurrentHttp.percentilesMs.p95 <= acceptanceLimits.concurrentP95Ms,
+    concurrentResponses: concurrentHttp.sampleCount === expectedConcurrent && concurrentHttp.successCount === expectedConcurrent,
+    unexpected5xx: concurrentHttp.unexpected5xxRate < acceptanceLimits.unexpected5xxRate
+  };
+  return { limits: acceptanceLimits, checks, passed: Object.values(checks).every(Boolean) };
+}
+
 async function main() {
-  const { values } = parseArgs({ options: { smoke: { type: 'boolean', default: false } } });
+  const { values } = parseArgs({ options: { smoke: { type: 'boolean' }, reference: { type: 'boolean' } } });
+  if (values.smoke && values.reference) throw new Error('请选择快速检查或参考测量。');
   const workload = values.smoke ? smokeWorkload : fullWorkload;
   const output = values.smoke ? 'output/benchmark-classroom-smoke.json' : 'output/benchmark-classroom.json';
   const startedAt = new Date().toISOString();
   const machine = environment();
+  const resourceLimits = values.reference ? referenceLimits(machine) : undefined;
   const engine = measureEngine(workload);
   const server = createServer();
   try {
@@ -139,15 +178,17 @@ async function main() {
     const serialHttp = await measureSerialHttp(url, workload);
     console.log(`开始 ${workload.clients} 客户端、${workload.durationMs / 1000} 秒负载测量。报告 ${output}`);
     const concurrentHttp = await measureConcurrentHttp(url, workload);
+    const acceptance = values.reference ? evaluateAcceptance(workload, engine, serialHttp, concurrentHttp) : undefined;
     const report = {
       schemaVersion: 1, startedAt, finishedAt: new Date().toISOString(), mode: values.smoke ? 'smoke' : 'full',
       scope: { endpoint, binding: loopbackHost, serverAndDriverShareProcess: true, authenticated: false, externalModel: false, input },
       environment: machine, workload: { ...workload, requestTimeoutMs, scheduling: 'synchronous-bursts' },
-      engine, serialHttp, concurrentHttp
+      resourceLimits, engine, serialHttp, concurrentHttp, acceptance
     };
     await mkdir(dirname(output), { recursive: true });
     await writeFile(output, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`完成 ${concurrentHttp.sampleCount} 次并发负载请求，成功 ${concurrentHttp.successCount} 次。报告 ${output}`);
+    if (acceptance && !acceptance.passed) throw new Error('参考负载的延迟、样本或返回结果未达标。');
   } finally {
     server.closeAllConnections();
     await new Promise(resolve => server.close(resolve));
