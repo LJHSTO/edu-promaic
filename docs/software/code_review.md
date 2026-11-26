@@ -21,6 +21,7 @@
 | 语法与静态检查 | 0 个错误，0 条警告 | `npm run check`、`npm run lint` |
 | 单元及接口回归 | 96 项通过 | 75 项单元测试和 21 项接口测试。覆盖课堂流程、异步保护、班级授权、学习记录留存、审计轮转及备份恢复。 |
 | HTTPS 系统测试 | 1 项通过 | 使用临时证书和文件凭据启动进程，验证停机轮转、保留策略、重启续写和启动检查点。 [系统测试](../../tests/system/protected-launch.test.js) |
+| Linux 安装验证 | 通过 | Ubuntu 上启动安装后的 systemd 服务，验证证书和回环监听、服务账号、目录权限，以及 `401` 响应与签名审计的关联。 [安装测试](../../tests/system/linux-service.sh) |
 | 教学材料检索 | 20 条标注样例通过 | 核对点值、邻域、左右极限、约分和连续性等查询的首条结果，另测版本限制、域外查询与引用隔离。 [检索测试](../../tests/unit/learning_knowledge.test.js#L10) |
 | 浏览器流程 | 通过 | 复核演示及 HTTPS 课堂，并验证 320 px 教师布局、按班级下载 CSV 和学生导出拒绝。 [质量报告](code_quality.md) |
 | 重复代码及依赖 | 0 个重复片段，0 项已知依赖漏洞 | `npm run quality:duplicates` 与 `npm audit --audit-level=high`。 [扫描报告](code_quality.md) |
@@ -74,6 +75,8 @@
 | R20 | [审计轮转](../../code/backend/classroom-audit.js#L145) | SM-V16。活动审计达到上限后，需继续写入并保留连续性。 | 核对归档和末尾检查点后生成候选分段，延续全局序号与链头。测试覆盖连续轮转、容量上限和检查点不匹配。 |
 | R21 | [会话留存](../../code/backend/classroom.js#L272) · [清理审计](../../code/backend/protected-profile.js#L41) | 到期会话应退出教师汇总和导出，旧时间和在途回复需单独处理。 | 按成功提交时间自然到期，未知时间的旧记录获得完整周期。删除写入前记录班级审计，跨超时的在途回复无法写回。 [留存测试](../../tests/unit/classroom_retention.test.js) |
 | R22 | [停机处理](../../code/backend/server.js#L313) · [启动检查点](../../code/backend/protected-profile.js#L82) | 服务中断可能使已发出的响应缺少审计结果。 | 正常停机排空连接，保留已完成响应的审计结果。配置独立检查点后，启动拒绝缺失或回退的活动审计。 [系统测试](../../tests/system/protected-launch.test.js) |
+| R23 | [受保护请求](../../code/backend/server.js#L209) | 鉴别或授权失败时，审计有请求编号，HTTP 响应缺少对应编号，网关日志无法关联。 | 在授权前设置服务端生成的请求编号。接口验收比对 `401`、`403` 的响应编号与审计编号。安装测试经 HTTPS 重验 `401`，并验证审计签名。 [接口测试](../../tests/integration/classroom_security.test.js#L120) · [安装测试](../../tests/system/linux-service.sh#L96) |
+| R24 | [环境约束与验收](../../scripts/benchmark-classroom.js#L129) | 性能基准需要可复现的资源上限，也需要识别缺样、错误响应和指标超限。 | 工作流设置 4 核、8 GiB 与禁用交换空间。脚本核验约束，再检查样本数、响应内容、状态码和 P95，保存逐请求结果。 [基准工作流](../../.github/workflows/decision-benchmark.yml#L34) · [基准结果](code_quality.md#决策接口性能) |
 
 ## 6. 复验与跟踪
 

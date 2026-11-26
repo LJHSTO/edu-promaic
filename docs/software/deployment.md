@@ -63,10 +63,12 @@ location / {
 }
 ```
 
-网关访问日志保留时间、请求方法、状态和请求编号。查询参数、会话标识、Cookie 和访问令牌应从日志模板中排除。
+网关访问日志保留时间、请求方法、状态和请求编号，排除查询参数、会话标识、Cookie 和访问令牌。受保护课堂的访问结果含 `X-Request-Id`，Nginx 可记录 `$upstream_http_x_request_id`，供审计员关联授权及拒绝记录。 [Nginx 上游响应变量](https://nginx.org/en/docs/http/ngx_http_upstream_module.html#var_upstream_http_)
 
 - 确认端口 `3443` 只监听回环地址。通过网关访问 `/api/health`，核对受信任证书与 `200` 响应。
 - 未登录时访问 `/api/classroom` 应返回 `401`。使用验收账号核对同班教师发布、学生作答和审计员读取记录，再验证跨班级或跨角色访问返回 `403`。
 - 用 `systemd-analyze security edu-promaic.service` 核对进程账户、文件系统沙箱和网络设置，用 `journalctl -u edu-promaic.service` 查看启动与检查结果。服务启动检查与机构测评分别记录。 [安全验收矩阵](security.md#等保三级对照)
+
+Linux 自动检查安装并启动参考服务单元，使用测试证书和凭据验证 HTTPS、回环监听、运行账号、目录权限及拒绝记录的审计签名。 [安装测试](../../tests/system/linux-service.sh)
 
 升级时切换至审核过的发布目录并重启服务，随后重复健康、授权和作答验收。回滚程序时保留课堂数据目录，先核对快照格式与目标版本，再切回上一已验证的发布目录。机构按维护窗口执行审计轮转、启动检查点更新和数据恢复。 [运维步骤](security.md#审计归档与备份恢复)
