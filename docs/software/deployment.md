@@ -71,4 +71,6 @@ location / {
 
 Linux 自动检查安装并启动参考服务单元，使用测试证书和凭据验证 HTTPS、回环监听、运行账号、目录权限及拒绝记录的审计签名。 [安装测试](../../tests/system/linux-service.sh)
 
+运维可用 `journalctl -u edu-promaic.service --grep=CLASSROOM_AUDIT_CAPACITY` 查看审计容量事件，并在集中日志平台按 `warning` 和 `critical` 设告警。 [阈值与轮转步骤](security.md#审计归档与备份恢复) · [journalctl 筛选](https://www.freedesktop.org/software/systemd/man/latest/journalctl.html#-g)
+
 升级时切换至审核过的发布目录并重启服务，随后重复健康、授权和作答验收。回滚程序时保留课堂数据目录，先核对快照格式与目标版本，再切回上一已验证的发布目录。机构按维护窗口执行审计轮转、启动检查点更新和数据恢复。 [运维步骤](security.md#审计归档与备份恢复)

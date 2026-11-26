@@ -13,6 +13,13 @@ function configPath(directory, value) {
 
 export function createProtectedProfile({ access, classrooms, defaultClass, audit, auditKey, tls }) {
   if (!classrooms.has(defaultClass)) throw new Error('默认班级须在班级成员表中。');
+  function auditMetadata({ action, requestId, classId, actor }) {
+    return {
+      action, requestId,
+      classId: classrooms.has(classId) ? classId : undefined,
+      actor: actor ? createHmac('sha256', auditKey).update(actor.subject).digest('hex') : undefined
+    };
+  }
   return {
     tls,
     resolveClass(classId) {
@@ -28,30 +35,32 @@ export function createProtectedProfile({ access, classrooms, defaultClass, audit
     auditTrail(classId) {
       return audit.tail({ classId });
     },
-    record({ action, outcome, requestId, classId, actor }) {
-      audit.append({
-        action, outcome, requestId,
-        classId: classrooms.has(classId) ? classId : undefined,
-        actor: actor ? createHmac('sha256', auditKey).update(actor.subject).digest('hex') : undefined
-      });
+    beginAudit(context) {
+      return audit.begin(auditMetadata(context));
+    },
+    recordDenied(context) {
+      audit.append({ ...auditMetadata(context), outcome: 'denied' });
     }
   };
 }
 
 function commitWithRetentionAudit(audit, classId, persist) {
-  const receipt = { action: 'retention.prune', requestId: randomUUID(), classId };
-  audit.append({ ...receipt, outcome: 'allowed' });
+  const complete = audit.begin({ action: 'retention.prune', requestId: randomUUID(), classId });
   try {
     persist();
   } catch (error) {
     try {
-      audit.append({ ...receipt, outcome: 'error' });
+      complete('error');
     } catch (auditError) {
       throw new AggregateError([error, auditError], '课堂清理及审计写入失败。');
     }
     throw error;
   }
-  audit.append({ ...receipt, outcome: 'success' });
+  complete('success');
+}
+
+function reportAuditCapacity({ level, usedBytes, limitBytes }) {
+  console.warn(JSON.stringify({ code: 'CLASSROOM_AUDIT_CAPACITY', level, usedBytes, limitBytes }));
 }
 
 function sweepClassrooms(classrooms) {
@@ -82,7 +91,8 @@ export function loadProtectedProfile(configFile, { engine, agent, storeKeyText, 
   const checkpoint = config.auditCheckpointFile === undefined ? undefined
     : JSON.parse(readBoundedFile(configPath(directory, config.auditCheckpointFile), 4096));
   const audit = createAuditLog({
-    filePath: resolve(dataDirectory, 'access-audit.json'), key: auditKey, domain: classroomAuditDomain, checkpoint
+    filePath: resolve(dataDirectory, 'access-audit.json'), key: auditKey, domain: classroomAuditDomain, checkpoint,
+    onCapacityWarning: reportAuditCapacity
   });
   const classrooms = new Map([...classIds].map(classId => [classId, createClassroom({
     filePath: resolve(dataDirectory, `${classId}.sealed.json`),

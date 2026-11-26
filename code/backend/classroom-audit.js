@@ -8,6 +8,9 @@ const segmentVersion = 2;
 const tagBytes = 32;
 export const maximumAuditBytes = 2 * 1024 * 1024;
 export const classroomAuditDomain = 'edu-access';
+const capacityWarningRatio = 0.8;
+const capacityCriticalRatio = 0.95;
+const completionOutcomes = new Set(['success', 'error']);
 const outcomes = new Set(['allowed', 'success', 'denied', 'error']);
 const metadataKeys = new Set(['action', 'outcome', 'requestId', 'classId', 'actor']);
 
@@ -169,26 +172,87 @@ function projectAudit({ at, action, outcome, requestId, classId, actor }) {
   return { at, action, outcome, requestId, classId, actor };
 }
 
-export function createAuditLog({ filePath, key, domain, checkpoint } = {}) {
+function reportCapacity(onCapacityWarning) {
+  let reportedLevel;
+  return usedBytes => {
+    if (!onCapacityWarning || usedBytes < maximumAuditBytes * capacityWarningRatio) return;
+    const level = usedBytes >= maximumAuditBytes * capacityCriticalRatio ? 'critical' : 'warning';
+    if (level === reportedLevel) return;
+    reportedLevel = level;
+    try {
+      onCapacityWarning({ level, usedBytes, limitBytes: maximumAuditBytes });
+    } catch {
+      console.error('[edu-promaic] 审计容量告警发送失败');
+    }
+  };
+}
+
+function completionBytes(metadata) {
+  const tag = Buffer.alloc(tagBytes).toString('base64url');
+  // Reserve for a safe integer sequence, an extended ISO year, and the longest completion outcome.
+  const largest = {
+    sequence: Number.MAX_SAFE_INTEGER, at: '+275760-09-13T00:00:00.000Z', previous: tag,
+    ...metadata, outcome: 'success', tag
+  };
+  return Buffer.byteLength(JSON.stringify(largest)) + 1;
+}
+
+function auditReservations(write) {
+  let reservedBytes = 0;
+  let reservedRecords = 0;
+  return {
+    append(event) {
+      write(parseMetadata(event), reservedBytes, reservedRecords);
+    },
+    begin(event) {
+      const metadata = parseMetadata({ ...event, outcome: 'allowed' });
+      const bytes = completionBytes(metadata);
+      reservedBytes += bytes;
+      reservedRecords++;
+      try {
+        write(metadata, reservedBytes, reservedRecords);
+      } catch (error) {
+        reservedBytes -= bytes;
+        reservedRecords--;
+        throw error;
+      }
+      let pending = true;
+      return outcome => {
+        if (!pending) throw new Error('审计结果已记录。');
+        if (!completionOutcomes.has(outcome)) throw new TypeError('审计结果不合法。');
+        pending = false;
+        reservedBytes -= bytes;
+        reservedRecords--;
+        write({ ...metadata, outcome }, reservedBytes, reservedRecords);
+      };
+    }
+  };
+}
+
+export function createAuditLog({ filePath, key, domain, checkpoint, onCapacityWarning } = {}) {
   if (typeof filePath !== 'string' || filePath.trim() === '') throw new TypeError('请配置课堂审计文件。');
   const signer = makeSigner(protectionKey(key, domain), domain);
   let state = loadAudit(filePath, signer);
   if (checkpoint !== undefined) verifyCheckpoint(checkpoint, state, domain, signer);
+  const reportUsage = reportCapacity(onCapacityWarning);
+  reportUsage(Buffer.byteLength(JSON.stringify(state)));
+
+  function write(metadata, reservedBytes, reservedRecords) {
+    const sequence = currentSequence(state) + 1;
+    if (!Number.isSafeInteger(sequence + reservedRecords)) throw new Error('审计序号超出有效范围。');
+    const record = { sequence, at: new Date().toISOString(), previous: state.head, ...metadata };
+    const tag = signer.sign(record);
+    const next = { ...state, head: tag, records: [...state.records, { ...record, tag }] };
+    const serialized = JSON.stringify(next);
+    const usedBytes = Buffer.byteLength(serialized);
+    if (usedBytes + reservedBytes > maximumAuditBytes) throw new Error('审计文件已达到容量上限。');
+    replacePrivateFile(filePath, serialized);
+    state = next;
+    reportUsage(usedBytes);
+  }
+
   return {
-    append(event) {
-      const metadata = parseMetadata(event);
-      const sequence = currentSequence(state) + 1;
-      if (!Number.isSafeInteger(sequence)) throw new Error('审计序号超出有效范围。');
-      const record = {
-        sequence, at: new Date().toISOString(), previous: state.head, ...metadata
-      };
-      const tag = signer.sign(record);
-      const next = { ...state, head: tag, records: [...state.records, { ...record, tag }] };
-      const serialized = JSON.stringify(next);
-      if (Buffer.byteLength(serialized) > maximumAuditBytes) throw new Error('审计文件已达到容量上限。');
-      replacePrivateFile(filePath, serialized);
-      state = next;
-    },
+    ...auditReservations(write),
     tail({ classId, limit = 50 } = {}) {
       if (!isSecurityIdentifier(classId) || !Number.isInteger(limit) || limit < 1 || limit > 100) {
         throw new TypeError('审计查询需要班级标识和有效条数。');

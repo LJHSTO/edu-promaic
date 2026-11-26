@@ -101,7 +101,7 @@ async function startProtected(t) {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const base = `http://127.0.0.1:${server.address().port}`;
-    return { base, request: makeClient(base) };
+    return { base, request: makeClient(base), server };
   }
 
   t.after(async () => {
@@ -182,6 +182,35 @@ test('学生只能恢复和作答自己的会话，创建幂等键按所有者�
   const updated = (await request(path, { method: 'POST', subject: student, body })).data;
   assert.equal(updated.phase, 'verification');
   assert.equal((await request(`/sessions/${first.id}`, { subject: student })).data.revision, 1);
+});
+
+test('受保护作答在响应前断线时记录一次审计错误', { timeout: 5_000 }, async t => {
+  const { base, request, server, auditFile } = await startProtected(t);
+  await publish(request);
+  const { data: session } = await begin(request, student);
+  const received = once(server, 'request');
+  const client = http.request(new URL(`/api/classroom/sessions/${session.id}/events`, base), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential(student)}`,
+      'Content-Type': 'application/json',
+      'Content-Length': '2'
+    }
+  });
+  const disconnected = once(client, 'error');
+  client.flushHeaders();
+
+  const [, response] = await received;
+  const closed = once(response, 'close');
+  const requestId = response.getHeader('X-Request-Id');
+  client.destroy();
+  const [[error]] = await Promise.all([disconnected, closed]);
+  assert.equal(error.code, 'ECONNRESET');
+  assert.equal(response.writableFinished, false);
+
+  const { records } = JSON.parse(await readFile(auditFile, 'utf8'));
+  const outcomes = records.filter(record => record.requestId === requestId).map(record => record.outcome);
+  assert.deepEqual(outcomes, ['allowed', 'error']);
 });
 
 test('加密会话重启后可读，审计员只能查看本班的去标识记录', async t => {

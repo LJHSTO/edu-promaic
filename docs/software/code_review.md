@@ -19,8 +19,8 @@
 | 检查项 | 结果 | 依据 |
 |---|---|---|
 | 语法与静态检查 | 0 个错误，0 条警告 | `npm run check`、`npm run lint` |
-| 单元及接口回归 | 96 项通过 | 75 项单元测试和 21 项接口测试。覆盖课堂流程、异步保护、班级授权、学习记录留存、审计轮转及备份恢复。 |
-| HTTPS 系统测试 | 1 项通过 | 使用临时证书和文件凭据启动进程，验证停机轮转、保留策略、重启续写和启动检查点。 [系统测试](../../tests/system/protected-launch.test.js) |
+| 单元及接口回归 | 99 项通过 | 77 项单元测试和 22 项接口测试。覆盖课堂流程、异步保护、班级授权、学习记录留存、审计预留、轮转及备份恢复。 |
+| HTTPS 系统测试 | 2 项通过 | 用临时证书和文件凭据启动服务，验证停机轮转、留存、重启检查点，以及容量不足时拒绝发布并记录告警。 [系统测试](../../tests/system/protected-launch.test.js) |
 | Linux 安装验证 | 通过 | Ubuntu 上启动安装后的 systemd 服务，验证证书和回环监听、服务账号、目录权限，以及 `401` 响应与签名审计的关联。 [安装测试](../../tests/system/linux-service.sh) |
 | 教学材料检索 | 20 条标注样例通过 | 核对点值、邻域、左右极限、约分和连续性等查询的首条结果，另测版本限制、域外查询与引用隔离。 [检索测试](../../tests/unit/learning_knowledge.test.js#L10) |
 | 浏览器流程 | 通过 | 复核演示及 HTTPS 课堂，并验证 320 px 教师布局、按班级下载 CSV 和学生导出拒绝。 [质量报告](code_quality.md) |
@@ -63,7 +63,7 @@
 | R08 | [线索选择与校验](../../code/core_engine/learning_agent/agent.js#L119) | SM-V07。缺失字段、越界候选或错误的引用可能使线索脱离课包。 | 重新按版本获取匹配条目，核验等级与文本。材料不足时沿图谱补查，再用固定线索。数值工具使用独立例子。 [助手测试](../../tests/unit/learning_agent.test.js) |
 | R09 | [会话记忆](../../code/core_engine/learning_agent/memory.js#L5) · [课堂回放](../../code/frontend/classroom.js#L399) | 近期错答与已用来源需要有明确的事件窗口。 | 会话记忆检查最近 16 个事件，保留最多 6 个来源编号。测试验证旧事件退出窗口、验证阶段误选不参与练习记忆及同级线索去重。 |
 | R10 | [模型选择](../../code/core_engine/learning_agent/agent.js#L91) · [外部调用](../../code/backend/model-planner.js#L34) | SM-V07。外部输出可能截断或选择候选集以外的材料。 | 响应限时限量，只接受完整 JSON 中的候选编号。超时或无效编号使用内置排序。适配器测试核对请求字段及选择边界。 [模型测试](../../tests/unit/learning_agent.test.js#L83) |
-| R11 | [课堂授权](../../code/backend/server.js#L209) · [会话归属](../../code/backend/classroom.js#L284) | 原型角色依赖页面切换，机构场景需要服务端权限。 | 受保护模式校验 RS256 访问令牌、签发方、受众、时间窗和鉴别等级。服务端名册决定班级角色，学生只能访问本人会话。 [授权回归](../../tests/integration/classroom_security.test.js#L130) |
+| R11 | [课堂授权](../../code/backend/server.js#L213) · [会话归属](../../code/backend/classroom.js#L284) | 原型角色依赖页面切换，机构场景需要服务端权限。 | 受保护模式校验 RS256 访问令牌、签发方、受众、时间窗和鉴别等级。服务端名册决定班级角色，学生只能访问本人会话。 [授权回归](../../tests/integration/classroom_security.test.js#L130) |
 | R12 | [加密与读取](../../code/backend/classroom-protection.js#L61) | SM-V07。损坏快照或班级文件错配可能被当作有效状态。 | 按班级绑定 AES-256-GCM 认证数据，启动时鉴别版本、密文和业务结构。用例覆盖错误密码材料、错误班级、明文和写入回滚。 [存储与审计测试](../../tests/unit/classroom_protection.test.js#L37) |
 | R13 | [审计快照验证](../../code/backend/classroom-audit.js#L137) · [审计结果](../../code/backend/server.js#L199) | 操作追溯需要验证完整性，也要识别一份真实旧快照被当作当前记录。 | 授权与结果分别记录，读取限所属班级。归档前与独立保管的签名检查点比对，拒绝已确认历史的回退或分叉。 [审计测试](../../tests/unit/classroom_audit.test.js) |
 | R14 | [文件容量](../../code/backend/classroom-protection.js#L9) · [审计容量](../../code/backend/classroom-audit.js#L8) | SM-V16。文件作为单进程存储时，容量与归档需要操作约定。 | 班级快照明文与审计日志各限 2 MiB。部署方配置容量监控、集中留存及归档周期。 [归档流程](security.md#审计归档与备份恢复) |
@@ -74,9 +74,11 @@
 | R19 | [汇总与导出](../../code/backend/classroom.js#L229) · [导出授权](../../code/backend/server.js#L170) | 首次通过率需明确分母，班级导出需要独立授权。 | 按是否提交验证分开计数，CSV 区分四种状态。接口验证同班教师可下载，跨班级或学生被拒绝，导出成功进入审计记录。 [授权测试](../../tests/integration/classroom_security.test.js#L130) |
 | R20 | [审计轮转](../../code/backend/classroom-audit.js#L145) | SM-V16。活动审计达到上限后，需继续写入并保留连续性。 | 核对归档和末尾检查点后生成候选分段，延续全局序号与链头。测试覆盖连续轮转、容量上限和检查点不匹配。 |
 | R21 | [会话留存](../../code/backend/classroom.js#L272) · [清理审计](../../code/backend/protected-profile.js#L41) | 到期会话应退出教师汇总和导出，旧时间和在途回复需单独处理。 | 按成功提交时间自然到期，未知时间的旧记录获得完整周期。删除写入前记录班级审计，跨超时的在途回复无法写回。 [留存测试](../../tests/unit/classroom_retention.test.js) |
-| R22 | [停机处理](../../code/backend/server.js#L313) · [启动检查点](../../code/backend/protected-profile.js#L82) | 服务中断可能使已发出的响应缺少审计结果。 | 正常停机排空连接，保留已完成响应的审计结果。配置独立检查点后，启动拒绝缺失或回退的活动审计。 [系统测试](../../tests/system/protected-launch.test.js) |
-| R23 | [受保护请求](../../code/backend/server.js#L209) | 鉴别或授权失败时，审计有请求编号，HTTP 响应缺少对应编号，网关日志无法关联。 | 在授权前设置服务端生成的请求编号。接口验收比对 `401`、`403` 的响应编号与审计编号。安装测试经 HTTPS 重验 `401`，并验证审计签名。 [接口测试](../../tests/integration/classroom_security.test.js#L120) · [安装测试](../../tests/system/linux-service.sh#L96) |
+| R22 | [停机处理](../../code/backend/server.js#L316) · [启动检查点](../../code/backend/protected-profile.js#L91) | 服务中断可能使已发出的响应缺少审计结果。 | 正常停机排空连接，保留已完成响应的审计结果。配置独立检查点后，启动拒绝缺失或回退的活动审计。 [系统测试](../../tests/system/protected-launch.test.js) |
+| R23 | [受保护请求](../../code/backend/server.js#L213) | 鉴别或授权失败时，审计有请求编号，HTTP 响应缺少对应编号，网关日志无法关联。 | 在授权前设置服务端生成的请求编号。接口验收比对 `401`、`403` 的响应编号与审计编号。安装测试经 HTTPS 重验 `401`，并验证审计签名。 [接口测试](../../tests/integration/classroom_security.test.js#L120) · [安装测试](../../tests/system/linux-service.sh#L96) |
 | R24 | [环境约束与验收](../../scripts/benchmark-classroom.js#L129) | 性能基准需要可复现的资源上限，也需要识别缺样、错误响应和指标超限。 | 工作流设置 4 核、8 GiB 与禁用交换空间。脚本核验约束，再检查样本数、响应内容、状态码和 P95，保存逐请求结果。 [基准工作流](../../.github/workflows/decision-benchmark.yml#L34) · [基准结果](code_quality.md#决策接口性能) |
+| R25 | [审计容量预留](../../code/backend/classroom-audit.js#L200) · [响应结果](../../code/backend/server.js#L199) | 活动分段接近上限时，授权记录写入后可能没有足够空间写入结果。客户端断开也会绕过正常响应结束事件。 | 执行业务前预留结果记录的容量。HTTP 响应完成或连接关闭时只写一次结果。测试确认余量不足的发布返回 `503`，审计和课程文件保持原样。 [断线测试](../../tests/integration/classroom_security.test.js#L187) · [HTTPS 容量测试](../../tests/system/protected-launch.test.js#L181) |
+| R26 | [容量告警](../../code/backend/classroom-audit.js#L175) | 运维需要在活动分段写满之前安排归档。 | 在 80% 和 95% 发出分级容量事件，每个进程对同一级别记录一次。系统测试核对进程日志，事件仅含级别和容量数据。 [运维命令](deployment.md#配置网关与验收) |
 
 ## 6. 复验与跟踪
 

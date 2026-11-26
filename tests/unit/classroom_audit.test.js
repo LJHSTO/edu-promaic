@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -9,6 +8,7 @@ import test from 'node:test';
 import {
   classroomAuditDomain, createAuditLog, maximumAuditBytes, prepareAuditRollover, readAuditSnapshot, verifyAuditSnapshot
 } from '../../code/backend/classroom-audit.js';
+import { historicalAuditSnapshot } from '../fixtures/audit-snapshot.js';
 
 const key = Buffer.alloc(32, 19);
 const domain = classroomAuditDomain;
@@ -210,32 +210,42 @@ test('轮换要求当前末尾、独立归档和完整原段', t => {
   assert.equal(readFileSync(filePath, 'utf8'), text);
 });
 
-function historicSnapshotAtLimit() {
-  // 生成旧格式样本，避免逐条写入导致测试反复重写大文件。
-  const prefix = JSON.stringify(['edu-promaic/classroom-audit', 1, domain]);
-  const digest = data => createHmac('sha256', key).update(prefix).update(JSON.stringify(data)).digest('base64url');
-  const state = { version: 1, head: digest(['start']), records: [] };
-  let bytes = Buffer.byteLength(JSON.stringify(state));
-  while (bytes < maximumAuditBytes) {
-    const sequence = state.records.length + 1;
-    const at = '2026-11-25T00:00:00.000Z';
-    const previous = state.head;
-    const metadata = entry(`sample-${sequence}`, { actor: null });
-    const { action, outcome, requestId, classId, actor } = metadata;
-    const tag = digest([sequence, at, previous, action, outcome, requestId, classId, actor]);
-    const record = { sequence, at, previous, ...metadata, tag };
-    const length = Buffer.byteLength(JSON.stringify(record)) + Number(sequence > 1);
-    if (bytes + length > maximumAuditBytes) break;
-    state.records.push(record);
-    state.head = tag;
-    bytes += length;
-  }
-  return JSON.stringify(state);
-}
+test('接近上限时为已授权请求预留结果，后续写入无法占用余量', t => {
+  const { filePath } = auditFixture(t);
+  const text = historicalAuditSnapshot({ key, domain, limit: maximumAuditBytes - 535 });
+  writeFileSync(filePath, text);
+  const start = readAuditSnapshot({ filePath, key }).checkpoint;
+  const log = createAuditLog({ filePath, key, domain });
+  const ongoing = log.begin({ action: 'data.read', requestId: 'ongoing', classId: 'alpha' });
+  const second = { action: 'data.read', requestId: 'second', classId: 'alpha' };
+  assert.throws(() => log.begin(second), /容量上限/);
+  assert.throws(() => log.append(entry('larger-denial', { outcome: 'denied', actor: 'a'.repeat(120) })), /容量上限/);
+  ongoing('error');
+  assert.throws(() => ongoing('success'), /已记录/);
+  const { state } = readAuditSnapshot({ filePath, key, checkpoint: start });
+  assert.deepEqual(state.records.slice(start.sequence).map(({ requestId, outcome }) => [requestId, outcome]), [
+    ['ongoing', 'allowed'], ['ongoing', 'error']
+  ]);
+});
+
+test('启动和跨过容量阈值时只通知当前级别，回执仅含容量数据', t => {
+  const { filePath } = auditFixture(t);
+  const text = historicalAuditSnapshot({ key, domain, limit: Math.ceil(maximumAuditBytes * 0.95) - 1 });
+  writeFileSync(filePath, text);
+  const warnings = [];
+  const log = createAuditLog({ filePath, key, domain, onCapacityWarning: metadata => warnings.push(metadata) });
+  log.append(entry('trigger-critical', { actor: 'a'.repeat(120) }));
+  const bytesAtCritical = Buffer.byteLength(readFileSync(filePath));
+  log.append(entry('still-critical'));
+  assert.deepEqual(warnings, [
+    { level: 'warning', usedBytes: Buffer.byteLength(text), limitBytes: maximumAuditBytes },
+    { level: 'critical', usedBytes: bytesAtCritical, limitBytes: maximumAuditBytes }
+  ]);
+});
 
 test('接近容量上限的历史日志可独立归档并在新段继续写入', t => {
   const { directory, filePath } = auditFixture(t);
-  const text = historicSnapshotAtLimit();
+  const text = historicalAuditSnapshot({ key, domain });
   assert.ok(Buffer.byteLength(text) <= maximumAuditBytes);
   writeFileSync(filePath, text);
   const before = readAuditSnapshot({ filePath, key });

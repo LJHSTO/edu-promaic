@@ -196,14 +196,18 @@ function denyClassroom(res, error) {
   sendJson(res, error.status, { success: false, error: error.message });
 }
 
-function recordOutcome(res, profile, context) {
-  res.once('finish', () => {
+function recordOutcome(res, complete, requestId) {
+  function settle() {
+    res.off('finish', settle);
+    res.off('close', settle);
     try {
-      profile.record({ ...context, outcome: res.statusCode < 400 ? 'success' : 'error' });
+      complete(res.writableFinished && res.statusCode < 400 ? 'success' : 'error');
     } catch {
-      console.error('[edu-promaic] 审计结果写入失败', context.requestId);
+      console.error('[edu-promaic] 审计结果写入失败', requestId);
     }
-  });
+  }
+  res.once('finish', settle);
+  res.once('close', settle);
 }
 
 function protectedContext(req, res, url, route, profile) {
@@ -215,18 +219,17 @@ function protectedContext(req, res, url, route, profile) {
     room = profile.select(context.actor, context.classId, route.roles);
   } catch (error) {
     try {
-      profile.record({ ...context, outcome: 'denied' });
+      profile.recordDenied(context);
     } catch (auditError) {
       return denyClassroom(res, auditError);
     }
     return denyClassroom(res, error);
   }
   try {
-    profile.record({ ...context, outcome: 'allowed' });
+    recordOutcome(res, profile.beginAudit(context), context.requestId);
   } catch (error) {
     return denyClassroom(res, error);
   }
-  recordOutcome(res, profile, context);
   return { room, profile, classId: context.classId, owner: context.actor.subject };
 }
 

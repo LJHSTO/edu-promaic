@@ -9,9 +9,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
-import { readAuditSnapshot } from '../../code/backend/classroom-audit.js';
+import { classroomAuditDomain, maximumAuditBytes, readAuditSnapshot } from '../../code/backend/classroom-audit.js';
 import { createStoreProtection } from '../../code/backend/classroom-protection.js';
 import { createClassroom } from '../../code/backend/classroom.js';
+import { historicalAuditSnapshot } from '../fixtures/audit-snapshot.js';
 
 const run = promisify(execFile);
 const host = '127.0.0.1';
@@ -80,12 +81,13 @@ async function fixture(t) {
 
 async function withServer(settings, execute) {
   const child = spawn(process.execPath, ['code/backend/server.js'], { env: settings.env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const exited = once(child, 'close');
   let errors = '';
   child.stderr.setEncoding('utf8').on('data', piece => { errors += piece; });
   try {
     const [line] = await Promise.race([
       once(child.stdout, 'data', { signal: AbortSignal.timeout(8000) }),
-      once(child, 'close').then(([status]) => { throw new Error(`服务启动失败（${status}） ${errors.trim()}`); })
+      exited.then(([status]) => { throw new Error(`服务启动失败（${status}） ${errors.trim()}`); })
     ]);
     assert.match(String(line), /Edu ProMAIC 已启动：https:\/\//);
     await execute();
@@ -95,8 +97,11 @@ async function withServer(settings, execute) {
       child.kill();
       const [status, signal] = await closed;
       assert.deepEqual([status, signal], [0, null]);
+    } else {
+      await exited;
     }
   }
+  return errors;
 }
 
 async function request({ origin, ca, credential }, path, { role, method = 'GET', body } = {}) {
@@ -171,4 +176,32 @@ test('受保护入口使用 TLS 和文件凭据，启动清理到期会话，停
   await assert.rejects(run(process.execPath, ['code/backend/server.js'], { env: settings.env, timeout: 8000 }), {
     code: 1, stderr: /审计快照早于已保存的检查点/
   });
+});
+
+test('受保护入口在审计余量不足时拒绝发布并输出一次容量告警', async t => {
+  const settings = await fixture(t);
+  const auditFile = join(settings.dataDirectory, 'access-audit.json');
+  const classFile = join(settings.dataDirectory, `${classId}.sealed.json`);
+  const protection = createStoreProtection({ key: settings.storeKey, domain: `class:${classId}` });
+  const sealed = protection.seal({ published: false, sessions: [] });
+  const audit = historicalAuditSnapshot({
+    key: settings.auditKey, domain: classroomAuditDomain, limit: maximumAuditBytes - 350
+  });
+  await Promise.all([
+    writeFile(auditFile, audit, { mode: 0o600 }),
+    writeFile(classFile, sealed, { mode: 0o600 })
+  ]);
+
+  const stderr = await withServer(settings, async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { status, result } = await request(settings, '/api/classroom/publish', { role: 'teacher', method: 'POST' });
+      assert.equal(status, 503);
+      assert.equal(result.success, false);
+    }
+  });
+  assert.equal(await readFile(auditFile, 'utf8'), audit);
+  assert.equal(await readFile(classFile, 'utf8'), sealed);
+  assert.deepEqual(stderr.trim().split('\n').map(line => JSON.parse(line)), [{
+    code: 'CLASSROOM_AUDIT_CAPACITY', level: 'critical', usedBytes: Buffer.byteLength(audit), limitBytes: maximumAuditBytes
+  }]);
 });

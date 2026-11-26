@@ -70,7 +70,11 @@ checkpoint=$(node scripts/classroom-audit.js export \
   (set -C; printf '%s\n' "$checkpoint" > /srv/audit-custody/next-checkpoint.json)
 ```
 
-首次可信归档省略 `--checkpoint`。复核时可用 `verify` 代替 `export`，保留 `--file` 和 `--checkpoint` 参数并省略 `--out`。归档目录和密钥按岗位分开保管。单个活动分段上限为 2 MiB，机构根据流量设置容量告警和轮转周期。
+首次可信归档省略 `--checkpoint`。复核时可用 `verify` 代替 `export`，保留 `--file` 和 `--checkpoint` 参数并省略 `--out`。归档目录和密钥按岗位分开保管。
+
+活动分段上限为 2 MiB。使用量达到 80% 时安排归档窗口，达到 95% 时优先轮转。服务在启动和跨过阈值时记录 `CLASSROOM_AUDIT_CAPACITY`，每个进程对同一级别记录一次。日志只含告警级别、已用字节和容量上限，可转发至机构日志平台。
+
+受保护操作先写入授权记录，为结果在当前分段内预留空间。容量不足时返回 `503`，业务操作尚未执行。客户端提前断开时，审计结果记为 `error`，表示响应未完成。异常停机或审计写入失败后，按请求编号复核有授权记录而缺少结果的操作。
 
 轮转在维护窗口进行。停止写入后导出当前分段，将完整归档和对应的末尾检查点交由独立保管。`rollover` 核对活动分段、归档与检查点，在新路径生成续写候选，沿用上一段的序号和链头。
 
