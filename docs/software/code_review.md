@@ -78,9 +78,9 @@
 | R22 | [停机处理](../../code/backend/server.js#L316) · [启动检查点](../../code/backend/protected-profile.js#L91) | 服务中断可能使已发出的响应缺少审计结果。 | 正常停机排空连接，保留已完成响应的审计结果。配置独立检查点后，启动拒绝缺失或回退的活动审计。 [系统测试](../../tests/system/protected-launch.test.js) |
 | R23 | [受保护请求](../../code/backend/server.js#L213) | 鉴别或授权失败时，审计有请求编号，HTTP 响应缺少对应编号，网关日志无法关联。 | 在授权前设置服务端生成的请求编号。接口验收比对 `401`、`403` 的响应编号与审计编号。安装测试经 HTTPS 重验 `401`，并验证审计签名。 [接口测试](../../tests/integration/classroom_security.test.js#L120) · [安装测试](../../tests/system/linux-service.sh#L96) |
 | R24 | [环境约束与验收](../../scripts/benchmark-classroom.js#L129) | 性能基准需要可复现的资源上限，也需要识别缺样、错误响应和指标超限。 | 工作流设置 4 核、8 GiB 与禁用交换空间。脚本核验约束，再检查样本数、响应内容、状态码和 P95，保存逐请求结果。 [基准工作流](../../.github/workflows/decision-benchmark.yml#L34) · [基准结果](code_quality.md#决策接口性能) |
-| R25 | [审计容量预留](../../code/backend/classroom-audit.js#L200) · [响应结果](../../code/backend/server.js#L199) | 活动分段接近上限时，授权记录写入后可能没有足够空间写入结果。客户端断开也会绕过正常响应结束事件。 | 执行业务前预留结果记录的容量。HTTP 响应完成或连接关闭时只写一次结果。测试确认余量不足的发布返回 `503`，审计和课程文件保持原样。 [断线测试](../../tests/integration/classroom_security.test.js#L187) · [HTTPS 容量测试](../../tests/system/protected-launch.test.js#L181) |
+| R25 | [审计容量预留](../../code/backend/classroom-audit.js#L200) · [响应结果](../../code/backend/server.js#L199) | 活动分段接近上限时，授权记录写入后可能没有足够空间写入结果。客户端断开也会绕过正常响应结束事件。 | 执行业务前预留结果记录的容量。HTTP 响应完成或连接关闭时只写一次结果。测试确认余量不足的发布返回 `503`，审计和课程文件保持原样。 [断线测试](../../tests/integration/classroom_security.test.js#L187) · [HTTPS 容量测试](../../tests/system/protected-launch.test.js#L73) |
 | R26 | [容量告警](../../code/backend/classroom-audit.js#L175) | 运维需要在活动分段写满之前安排归档。 | 在 80% 和 95% 发出分级容量事件，每个进程对同一级别记录一次。系统测试核对进程日志，事件仅含级别和容量数据。 [运维命令](deployment.md#配置网关与验收) |
-| R27 | [网关模板](../../deployment/linux/nginx-classroom.example.conf) | 独立服务测试无法覆盖网关上游证书校验、浏览器同源授权和访问日志字段。 | 用两段 HTTPS 启动网关与课堂服务。核对同源写入和跨源拒绝，证书名称或 CA 不匹配时返回 `502`，并将访问日志请求编号与签名审计对应。 [网关测试](../../tests/system/nginx-gateway.js) |
+| R27 | [网关模板](../../deployment/linux/nginx-classroom.example.conf) | 独立服务测试无法覆盖网关上游证书校验、浏览器同源授权和访问日志字段。 | 用两段 HTTPS 启动网关与课堂服务。核对同源写入和跨源拒绝，证书名称或 CA 不匹配时返回 `502`，并将访问日志请求编号与签名审计对应。 [网关测试](../../tests/system/nginx-gateway.js#L103) |
 
 ## 6. 复验与跟踪
 
